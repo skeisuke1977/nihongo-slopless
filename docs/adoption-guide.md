@@ -17,12 +17,15 @@
 
 ## 5分で試す
 
-依存パッケージはない。Node.js 20以上で、まずサンプルと対象文書を確認する。
+依存パッケージはない。Node.js 20以上で、まずサンプルと対象文書を確認する。GitHub から clone したソースチェックアウトでは、開発者向け確認として `npm test` も実行できる。
+
+```bash
+node bin/nihongo-slopless.mjs examples/sloppy.md --pretty
+node bin/nihongo-slopless.mjs "docs/**/*.md" --profile minimal --pretty --fail-on off
+```
 
 ```bash
 npm test
-node bin/nihongo-slopless.mjs examples/sloppy.md --pretty
-node bin/nihongo-slopless.mjs "docs/**/*.md" --profile minimal --pretty --fail-on off
 ```
 
 最初は `--fail-on off` を使い、指摘を見てもCIや作業を止めない。指摘の種類、件数、修正しない理由を確認してから、失敗条件を置く。

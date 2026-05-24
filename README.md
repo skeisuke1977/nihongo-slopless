@@ -45,8 +45,13 @@ GitHub Actions の公式テンプレート配布は v0.1.0 の範囲外です。
 依存パッケージはありません。Node.js 20以上だけで動きます。
 
 ```bash
-npm test
 node bin/nihongo-slopless.mjs examples/sloppy.md --pretty
+```
+
+GitHub から clone したソースチェックアウトでは、開発者向け確認として full test も実行できます。
+
+```bash
+npm test
 ```
 
 グロブ、ファイル、ディレクトリ、標準入力に対応します。
@@ -313,11 +318,11 @@ textlint風コメントも読めます。
 
 公開ベータでは、npmパッケージだけを見てもCLI、設定、公開docs、examplesの役割が分かる状態を目指します。配布対象は `package.json` の `files` で固定し、内部運用ログ、ローカル検証データ、第三者本文、生成済みレビュー成果物、開発用テスト fixture は含めません。
 
-GitHub Actions の公式テンプレート配布は v0.1.0 の範囲外です。ただし、SARIF 出力を使った連携の考え方と参考例は `docs/ci-sarif.md` に置いています。ローカル開発で回す最小確認は `npm test`、評価とdocs lintを含む公開前確認は `npm run check` で実行します。
+GitHub Actions の公式テンプレート配布は v0.1.0 の範囲外です。ただし、SARIF 出力を使った連携の考え方と参考例は `docs/ci-sarif.md` に置いています。GitHub から clone したソースチェックアウトで回す最小確認は `npm test`、評価とdocs lintを含む公開前確認は `npm run check` で実行します。
 
 npm配布する場合の梱包対象は `package.json` の `files` で固定しています。`npm pack --dry-run --json` で、内部開発設定、ローカル運用ログ、run記録、非公開validation、ローカルcorpus、生成済みreview bundle、開発用の `test/` と `validation/` が含まれないことを確認します。`docs/` は公開利用に必要な文書だけを明示列挙します。Codex向けには `docs/codex.md`、`examples/AGENTS.md`、`examples/skills/nihongo-slopless/SKILL.md` を同梱します。
 
-`npm test`、`npm run evaluate`、`npm run check` は、GitHub から clone したソースチェックアウトで実行する開発者向け確認です。npm パッケージ本体は利用者向けの CLI 配布を優先し、開発用の `test/` と `validation/` は同梱しません。
+`npm test`、`npm run evaluate`、`npm run check` の full check は、GitHub から clone したソースチェックアウトで実行する開発者向け確認です。npm パッケージ本体は利用者向けの CLI 配布を優先し、開発用の `test/` と `validation/` は同梱しません。npm package 内で `npm test` を実行した場合は CLI smoke check に切り替え、`npm run evaluate` は検証seedが同梱されていないことを明示して終了します。
 
 `package.json` の `repository`, `bugs`, `homepage` は、公開先として `https://github.com/skeisuke1977/nihongo-slopless` を指します。公開前に、GitHub上でリポジトリとIssueページが実在することを `RELEASE_CHECKLIST.md` に沿って確認してください。
 

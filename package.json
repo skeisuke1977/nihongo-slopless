@@ -39,6 +39,7 @@
     "scripts/fetch-open-corpus.mjs",
     "scripts/profile-goldset-coverage.mjs",
     "scripts/profile-matrix.mjs",
+    "scripts/run-evaluate.mjs",
     "scripts/run-tests.mjs",
     "scripts/validate-sarif.mjs",
     "src/"
@@ -50,7 +51,7 @@
     "lint:sample": "node bin/nihongo-slopless.mjs examples/sloppy.md --pretty",
     "lint:docs": "node bin/nihongo-slopless.mjs README.md docs/adoption-guide.md docs/ci-sarif.md docs/codex.md docs/configuration.md docs/ethical-use.md docs/open-corpus-loop.md docs/profiles-matrix.md docs/rules.md docs/troubleshooting.md docs/validation-plan.md --profile general --pretty --fail-on off",
     "test": "node scripts/run-tests.mjs",
-    "evaluate": "node scripts/evaluate-corpus.mjs validation/goldset.example.jsonl --pretty",
+    "evaluate": "node scripts/run-evaluate.mjs",
     "check": "npm run test && npm run evaluate && npm run lint:docs"
   },
   "keywords": [

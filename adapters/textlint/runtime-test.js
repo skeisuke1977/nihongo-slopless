@@ -979,7 +979,7 @@ function testCitationNeededRuntimeBoundaries() {
     'citation-needed should suppress numeric evidence in the same paragraph',
   );
 
-  const narrowResearchBridge = '研究でも、LLM応答に埋め込まれた広告は「見抜かれにくい」という結果が報告されている。';
+  const narrowResearchBridge = '研究でも、自動応答に混ざった案内文は「見落とされやすい」という結果が報告されている。';
   assert.deepEqual(
     byRule(runTextlintLike(narrowResearchBridge, citationOnlyConfig), 'citation-needed'),
     [],

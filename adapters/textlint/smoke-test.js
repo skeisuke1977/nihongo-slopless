@@ -570,7 +570,7 @@ function testCitationNeededBoundary() {
   assert.deepEqual(runRule('citation-needed', withSourceName), [], 'citation-needed should suppress when a source name is present');
 
   // narrow research bridge は standalone と同じ狭い条件だけ抑制
-  const narrowResearchBridge = '研究でも、LLM応答に埋め込まれた広告は「見抜かれにくい」という結果が報告されている。';
+  const narrowResearchBridge = '研究でも、自動応答に混ざった案内文は「見落とされやすい」という結果が報告されている。';
   assert.deepEqual(
     runRule('citation-needed', narrowResearchBridge),
     [],
