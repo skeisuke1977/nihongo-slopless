@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "nihongo-slopless/long-sentence": ["warning", { "maxChars": 110, "errorChars": 170 }],
+    "nihongo-slopless/long-paragraph": ["warning", { "maxChars": 420, "maxSentences": 5 }],
+    "nihongo-slopless/chat-response-leakage": "warning",
+    "nihongo-slopless/empty-conclusion": "warning",
+    "nihongo-slopless/weasel-phrases": ["warning", { "maxPerParagraph": 3 }],
+    "nihongo-slopless/citation-needed": "warning",
+    "nihongo-slopless/thin-sentence": "warning",
+    "nihongo-slopless/buzzword-density": "info",
+    "nihongo-slopless/same-ending": "info"
+  }
+}

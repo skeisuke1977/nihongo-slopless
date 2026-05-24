@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "nihongo-slopless/hidden-unicode-controls": "error",
+    "nihongo-slopless/placeholder": "error",
+    "nihongo-slopless/chat-response-leakage": "warning",
+    "nihongo-slopless/long-sentence": ["warning", { "maxChars": 140, "errorChars": 220 }],
+    "nihongo-slopless/long-paragraph": ["info", { "maxChars": 650, "maxSentences": 8 }],
+    "nihongo-slopless/list-intro-padding": false,
+    "nihongo-slopless/empty-conclusion": false,
+    "nihongo-slopless/weasel-phrases": false,
+    "nihongo-slopless/citation-needed": false,
+    "nihongo-slopless/absolute-claim": false,
+    "nihongo-slopless/abstract-noun-stack": false,
+    "nihongo-slopless/nominalization-density": false,
+    "nihongo-slopless/excessive-politeness": false,
+    "nihongo-slopless/actorless-action": false,
+    "nihongo-slopless/same-ending": false,
+    "nihongo-slopless/repeated-connectors": false,
+    "nihongo-slopless/translationese": false,
+    "nihongo-slopless/buzzword-density": false,
+    "nihongo-slopless/thin-sentence": false,
+    "nihongo-slopless/excessive-parentheses": false,
+    "nihongo-slopless/headline-decoration": false,
+    "nihongo-slopless/unscoped-generalization": false,
+    "nihongo-slopless/no-numerics-claim": false,
+    "nihongo-slopless/deadline-missing": false,
+    "nihongo-slopless/over-possibility": false,
+    "nihongo-slopless/unclear-deictic": false
+  }
+}

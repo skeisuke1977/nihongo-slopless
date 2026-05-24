@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "nihongo-slopless configuration",
+  "description": ".nihongo-slopless.json configuration for deterministic Japanese prose linting. This schema configures rule behavior and file exclusion; it does not define AI detection, authorship inference, or scoring fields.",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional editor hint pointing to this JSON Schema."
+    },
+    "rules": {
+      "type": "object",
+      "description": "Rule configuration keyed by full rule ID such as nihongo-slopless/long-sentence or by short rule ID such as long-sentence.",
+      "propertyNames": {
+        "enum": [
+          "nihongo-slopless/hidden-unicode-controls",
+          "hidden-unicode-controls",
+          "nihongo-slopless/placeholder",
+          "placeholder",
+          "nihongo-slopless/chat-response-leakage",
+          "chat-response-leakage",
+          "nihongo-slopless/list-intro-padding",
+          "list-intro-padding",
+          "nihongo-slopless/long-sentence",
+          "long-sentence",
+          "nihongo-slopless/long-paragraph",
+          "long-paragraph",
+          "nihongo-slopless/empty-conclusion",
+          "empty-conclusion",
+          "nihongo-slopless/weasel-phrases",
+          "weasel-phrases",
+          "nihongo-slopless/citation-needed",
+          "citation-needed",
+          "nihongo-slopless/absolute-claim",
+          "absolute-claim",
+          "nihongo-slopless/unscoped-generalization",
+          "unscoped-generalization",
+          "nihongo-slopless/no-numerics-claim",
+          "no-numerics-claim",
+          "nihongo-slopless/abstract-noun-stack",
+          "abstract-noun-stack",
+          "nihongo-slopless/nominalization-density",
+          "nominalization-density",
+          "nihongo-slopless/excessive-politeness",
+          "excessive-politeness",
+          "nihongo-slopless/actorless-action",
+          "actorless-action",
+          "nihongo-slopless/deadline-missing",
+          "deadline-missing",
+          "nihongo-slopless/same-ending",
+          "same-ending",
+          "nihongo-slopless/repeated-connectors",
+          "repeated-connectors",
+          "nihongo-slopless/translationese",
+          "translationese",
+          "nihongo-slopless/buzzword-density",
+          "buzzword-density",
+          "nihongo-slopless/thin-sentence",
+          "thin-sentence",
+          "nihongo-slopless/excessive-parentheses",
+          "excessive-parentheses",
+          "nihongo-slopless/headline-decoration",
+          "headline-decoration",
+          "nihongo-slopless/over-possibility",
+          "over-possibility",
+          "nihongo-slopless/unclear-deictic",
+          "unclear-deictic"
+        ]
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/ruleConfig"
+      }
+    },
+    "ignoreFiles": {
+      "type": "array",
+      "description": "Glob-like file patterns to exclude after CLI file, directory, and glob inputs are expanded. Standard input is never excluded.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "ignorePatterns": {
+      "type": "array",
+      "description": "Line-scoped body patterns to mask before prose linting. Each pattern requires a human-readable reason and is not AI detection, authorship inference, or scoring.",
+      "items": {
+        "$ref": "#/$defs/ignorePattern"
+      },
+      "uniqueItems": true,
+      "maxItems": 100
+    },
+    "allowTerms": {
+      "type": "array",
+      "description": "Literal terms whose findings may be suppressed only for explicitly listed compatible rules. This is not AI detection, authorship inference, or scoring.",
+      "items": {
+        "$ref": "#/$defs/allowTerm"
+      },
+      "uniqueItems": true,
+      "maxItems": 200
+    },
+    "collapseOccurrences": {
+      "type": "boolean",
+      "description": "When true, nearby findings from the same rule on the same line are folded into occurrences[]."
+    },
+    "occurrenceMergeDistance": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Maximum column distance used when collapseOccurrences groups nearby same-line findings."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["info", "warning", "error"]
+    },
+    "ruleOptions": {
+      "type": "object",
+      "description": "Rule-specific options. Each rule documents its own option names and values.",
+      "additionalProperties": true
+    },
+    "allowTermRuleId": {
+      "type": "string",
+      "enum": [
+        "nihongo-slopless/absolute-claim",
+        "nihongo-slopless/citation-needed",
+        "nihongo-slopless/placeholder",
+        "nihongo-slopless/chat-response-leakage",
+        "nihongo-slopless/list-intro-padding",
+        "nihongo-slopless/empty-conclusion"
+      ]
+    },
+    "allowTerm": {
+      "type": "object",
+      "required": ["term", "rules", "reason"],
+      "properties": {
+        "term": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80,
+          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+          "description": "Literal term only. Regex syntax is not interpreted."
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/allowTermRuleId"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 300,
+          "pattern": "\\S",
+          "description": "Human-readable justification for keeping this term."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ignorePattern": {
+      "type": "object",
+      "required": ["pattern", "scope", "reason"],
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S",
+          "description": "JavaScript regular expression applied to one physical line without its line break. Keep it narrow; runtime validation rejects patterns that match an empty string."
+        },
+        "scope": {
+          "type": "string",
+          "const": "line",
+          "description": "Only line-scoped masking is implemented."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 300,
+          "pattern": "\\S",
+          "description": "Human-readable justification for excluding this line pattern."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ruleConfig": {
+      "description": "Rule setting. Use false or \"off\" to disable, a severity string to change importance, an array to set severity and options, or an object for explicit fields.",
+      "oneOf": [
+        {
+          "type": "boolean",
+          "const": false,
+          "description": "Disable the rule."
+        },
+        {
+          "type": "string",
+          "const": "off",
+          "description": "Disable the rule."
+        },
+        {
+          "$ref": "#/$defs/severity"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/severity"
+            },
+            {
+              "$ref": "#/$defs/ruleOptions"
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "severity": {
+              "$ref": "#/$defs/severity"
+            },
+            "options": {
+              "$ref": "#/$defs/ruleOptions"
+            }
+          },
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": ["severity"]
+            },
+            {
+              "required": ["options"]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

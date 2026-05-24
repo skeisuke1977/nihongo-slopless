@@ -1,0 +1,47 @@
+{
+  "name": "@nihongo-slopless/textlint-adapter-experimental",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Experimental textlint adapters that port 12 nihongo-slopless rules (long-sentence, same-ending, chat-response-leakage, placeholder, hidden-unicode-controls, headline-decoration, excessive-parentheses, empty-conclusion, citation-needed, actorless-action, buzzword-density, list-intro-padding). Prototype only. Not intended for npm publish.",
+  "main": "./index.js",
+  "type": "commonjs",
+  "license": "MIT",
+  "keywords": [
+    "textlint",
+    "textlintrule",
+    "nihongo-slopless",
+    "experimental",
+    "prototype"
+  ],
+  "files": [
+    "index.js",
+    "long-sentence.js",
+    "same-ending.js",
+    "chat-response-leakage.js",
+    "placeholder.js",
+    "hidden-unicode-controls.js",
+    "headline-decoration.js",
+    "excessive-parentheses.js",
+    "empty-conclusion.js",
+    "citation-needed.js",
+    "actorless-action.js",
+    "buzzword-density.js",
+    "list-intro-padding.js",
+    "smoke-test.js",
+    "runtime-test.js",
+    "preset-resolution-test.js",
+    "README.md"
+  ],
+  "scripts": {
+    "check": "node --check index.js && node --check long-sentence.js && node --check same-ending.js && node --check chat-response-leakage.js && node --check placeholder.js && node --check hidden-unicode-controls.js && node --check headline-decoration.js && node --check excessive-parentheses.js && node --check empty-conclusion.js && node --check citation-needed.js && node --check actorless-action.js && node --check buzzword-density.js && node --check list-intro-padding.js && node --check smoke-test.js && node --check runtime-test.js && node --check preset-resolution-test.js",
+    "smoke": "node smoke-test.js",
+    "runtime": "node runtime-test.js",
+    "preset-resolution": "node preset-resolution-test.js"
+  },
+  "peerDependencies": {
+    "textlint": ">=12.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

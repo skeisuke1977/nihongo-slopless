@@ -1,0 +1,70 @@
+{
+  "name": "nihongo-slopless",
+  "version": "0.1.0",
+  "description": "Deterministic Japanese Markdown prose linter for catching weak, vague, chatty, or over-polished writing patterns. Not an AI detector.",
+  "type": "module",
+  "author": "nihongo-slopless contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skeisuke1977/nihongo-slopless.git"
+  },
+  "bugs": {
+    "url": "https://github.com/skeisuke1977/nihongo-slopless/issues"
+  },
+  "homepage": "https://github.com/skeisuke1977/nihongo-slopless#readme",
+  "bin": {
+    "nihongo-slopless": "./bin/nihongo-slopless.mjs"
+  },
+  "files": [
+    "ACKNOWLEDGEMENTS.md",
+    "bin/",
+    "config/",
+    "docs/adoption-guide.md",
+    "docs/ci-sarif.md",
+    "docs/configuration.md",
+    "docs/codex.md",
+    "docs/ethical-use.md",
+    "docs/open-corpus-loop.md",
+    "docs/profiles-matrix.md",
+    "docs/rules.md",
+    "docs/troubleshooting.md",
+    "docs/validation-plan.md",
+    "examples/",
+    "RELEASE_NOTES.md",
+    "RELEASE_CHECKLIST.md",
+    "SECURITY.md",
+    "scripts/audit-open-corpus-manifest.mjs",
+    "scripts/audit-packaged-goldset.mjs",
+    "scripts/evaluate-corpus.mjs",
+    "scripts/fetch-open-corpus.mjs",
+    "scripts/profile-goldset-coverage.mjs",
+    "scripts/profile-matrix.mjs",
+    "scripts/run-tests.mjs",
+    "scripts/validate-sarif.mjs",
+    "src/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "lint:sample": "node bin/nihongo-slopless.mjs examples/sloppy.md --pretty",
+    "lint:docs": "node bin/nihongo-slopless.mjs README.md docs/adoption-guide.md docs/ci-sarif.md docs/codex.md docs/configuration.md docs/ethical-use.md docs/open-corpus-loop.md docs/profiles-matrix.md docs/rules.md docs/troubleshooting.md docs/validation-plan.md --profile general --pretty --fail-on off",
+    "test": "node scripts/run-tests.mjs",
+    "evaluate": "node scripts/evaluate-corpus.mjs validation/goldset.example.jsonl --pretty",
+    "check": "npm run test && npm run evaluate && npm run lint:docs"
+  },
+  "keywords": [
+    "japanese",
+    "markdown",
+    "linter",
+    "writing",
+    "prose",
+    "static-analysis",
+    "editing",
+    "style-check"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}

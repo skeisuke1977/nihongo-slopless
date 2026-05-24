@@ -1,0 +1,30 @@
+{
+  "rules": {
+    "nihongo-slopless/hidden-unicode-controls": "error",
+    "nihongo-slopless/placeholder": "error",
+    "nihongo-slopless/chat-response-leakage": "warning",
+    "nihongo-slopless/list-intro-padding": "info",
+    "nihongo-slopless/long-sentence": ["warning", { "maxChars": 100, "errorChars": 160 }],
+    "nihongo-slopless/long-paragraph": ["warning", { "maxChars": 360, "maxSentences": 5 }],
+    "nihongo-slopless/empty-conclusion": false,
+    "nihongo-slopless/weasel-phrases": false,
+    "nihongo-slopless/citation-needed": "warning",
+    "nihongo-slopless/absolute-claim": "warning",
+    "nihongo-slopless/abstract-noun-stack": ["warning", { "minHits": 4 }],
+    "nihongo-slopless/nominalization-density": ["warning", { "minHits": 6, "minChars": 60 }],
+    "nihongo-slopless/excessive-politeness": false,
+    "nihongo-slopless/actorless-action": "info",
+    "nihongo-slopless/same-ending": false,
+    "nihongo-slopless/repeated-connectors": false,
+    "nihongo-slopless/translationese": "info",
+    "nihongo-slopless/buzzword-density": false,
+    "nihongo-slopless/thin-sentence": false,
+    "nihongo-slopless/excessive-parentheses": "info",
+    "nihongo-slopless/headline-decoration": false,
+    "nihongo-slopless/unscoped-generalization": "warning",
+    "nihongo-slopless/no-numerics-claim": "warning",
+    "nihongo-slopless/deadline-missing": "warning",
+    "nihongo-slopless/over-possibility": "warning",
+    "nihongo-slopless/unclear-deictic": "warning"
+  }
+}
