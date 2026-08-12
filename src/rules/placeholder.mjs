@@ -49,6 +49,24 @@ function isQuotedOrExplained(text, index, length) {
   return isInsideQuote(text, index, length) || isExplainedAsExample(text, index, length);
 }
 
+function isStatisticalDummyTerm(text, index, length) {
+  if (text.slice(index, index + length) !== 'ダミー') return false;
+
+  const { start, end } = sentenceBounds(text, index);
+  const localIndex = index - start;
+  const sentence = text.slice(start, end);
+  const after = sentence.slice(localIndex + length);
+
+  // 「ダミー変数」「ダミー符号化」のように、ダミーが統計用語の
+  // 一部になっている場合は、未完成の目印として扱わない。
+  if (/^(?:変数|符号化|コーディング|コード化|項(?!目))/u.test(after)) return true;
+
+  // 「総合型選抜ダミーを説明変数に加える」「性別ダミーの係数」のように、
+  // カテゴリ名の後ろに付く用法も統計用語として扱う。単に
+  // 「ダミーを入れておく」は抑制しないよう、直後の統計語を必須にする。
+  return /^(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u.test(after);
+}
+
 function isMarkdownTaskCheckbox(text, index, length) {
   const { start, end } = lineBounds(text, index);
   const before = text.slice(start, index);
@@ -113,7 +131,8 @@ export const rule = {
     const generalMatches = findAll(doc.maskedText, generalRegex)
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
       .filter(match => !isMarkdownLinkLabel(doc.text, match.index, match[0].length))
-      .filter(match => !isQuotedOrExplained(doc.maskedText, match.index, match[0].length));
+      .filter(match => !isQuotedOrExplained(doc.maskedText, match.index, match[0].length))
+      .filter(match => !isStatisticalDummyTerm(doc.maskedText, match.index, match[0].length));
 
     const kokoniMatches = findAll(doc.maskedText, kokoniRegex)
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
