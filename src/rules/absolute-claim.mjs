@@ -34,6 +34,7 @@ const headingContextExclusions = [
 const numericMeasureExclusions = [
   '^(?:100%|１００％)(?:負担|担保|拠出|減税|削減|増加|減少|出資|還元|完成|消化|消費|達成|出典|気にしなく|気にしない|気にし|否定|気にしなくていい)',
   '^(?:100%|１００％)\\s*(?:手数料|出典|気)',
+  '^(?:100%|１００％)\\s*(?:を|より)?(?:超える|上回る|下回る|未満|以上|以下|以内|以外)',
 ];
 
 // 新規: 「ほぼ必ず」「ほとんど必ず」のように強いヘッジ副詞を伴うと断定弱まる。副作用: 弱い断定を拾わない。
@@ -90,6 +91,13 @@ const boundedProjectStatusExclusions = [
   '(?:A\\d|seed\\s*goldset|goldset|baseline|ルール|件|文書|ケース)[^。！？\\n]{0,48}(?:すべて|全て|完全に)[^。！？\\n]{0,32}(?:維持|PASS|pass|一致|動作確認|確認)',
   '(?:manifest|マニフェスト)[^。！？\\n]{0,32}(?:唯一)[^。！？\\n]{0,24}(?:入力|ソース|対象)',
   '唯一[^。！？\\n]{0,24}(?:完走分|採用分|入力|ソース)',
+];
+
+// 個数が明示された有限集合の照合結果は、対象範囲が閉じているため成果保証や
+// 一般化とは分ける。文境界内の短い距離に限定し、単に同じ文に数字や
+// 「すべて」があるだけでは抑制しない。
+const boundedQuantityExclusions = [
+  '(?:[0-9０-９]+|[一二三四五六七八九十百]+)(?:つ|件|項目|値|選択肢|回答|ケース)?(?:の(?:値|項目))?(?:すべて|全て)(?:が|は|を)?[^。！？\\n]{0,24}(?:(?:公表値|元データ|原資料|記録|計算結果|期待値|実測値)と)?(?:一致|再現|該当)(?:する|した|している|できる|できた)',
 ];
 
 // 新規: 技術仕様・定義文脈の対象全称は除外。副作用: 技術語を含む短い保証文の一部を拾わない。
@@ -221,6 +229,7 @@ export const rule = {
     scopedAudienceExclusions,
     operationalRequirementExclusions,
     boundedProjectStatusExclusions,
+    boundedQuantityExclusions,
     technicalSpecificationExclusions,
     negativeListContextExclusions,
     negativeListItemExclusions,
@@ -243,6 +252,7 @@ export const rule = {
     const scopedAudienceRegexes = buildRegexList(options.scopedAudienceExclusions);
     const operationalRequirementRegexes = buildRegexList(options.operationalRequirementExclusions);
     const boundedProjectStatusRegexes = buildRegexList(options.boundedProjectStatusExclusions);
+    const boundedQuantityRegexes = buildRegexList(options.boundedQuantityExclusions);
     const technicalSpecificationRegexes = buildRegexList(options.technicalSpecificationExclusions);
     const negativeListContextRegexes = buildRegexList(options.negativeListContextExclusions);
     const negativeListItemRegexes = buildRegexList(options.negativeListItemExclusions);
@@ -282,6 +292,7 @@ export const rule = {
       if (matchesAround(context, scopedAudienceRegexes)) return false;
       if (matchesAround(context, operationalRequirementRegexes)) return false;
       if (matchesAround(context, boundedProjectStatusRegexes)) return false;
+      if (matchesAround(context, boundedQuantityRegexes)) return false;
       if (matchesAround(context, technicalSpecificationRegexes)) return false;
 
       // 量的単位: 「100%負担」「100%気にしなくていい」など
