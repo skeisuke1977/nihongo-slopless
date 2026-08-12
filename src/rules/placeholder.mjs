@@ -49,6 +49,102 @@ function isQuotedOrExplained(text, index, length) {
   return isInsideQuote(text, index, length) || isExplainedAsExample(text, index, length);
 }
 
+const STATISTICAL_DUMMY_RELATION_PATTERN =
+  /^(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u;
+const MAX_COORDINATED_DUMMY_TERMS = 5;
+const MAX_COORDINATED_DUMMY_CHARS = 160;
+const COORDINATED_DUMMY_TERM_PATTERN =
+  /^(?:と|および|及び|、)\s*[\p{Script=Han}々〆ヵヶ\p{Script=Katakana}ーA-Za-z0-9０-９]{1,24}ダミー/u;
+const STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN =
+  /^項(?=[\s　]*(?:$|[、，。！？!?）)\]】」』]|(?:を|は|が|の|に|へ|で|と|も|から|まで|より)))/u;
+
+function hasExplicitDummyReplacementContext(sentence, localIndex, length) {
+  const before = sentence.slice(Math.max(0, localIndex - 48), localIndex);
+  const after = sentence.slice(localIndex + length, localIndex + length + 96);
+
+  if (/(?:本番値|実データ|正式な値)(?:の代わり(?:に|として)|の代替(?:に|として))[\s　]*$/u.test(before)) return true;
+
+  return /^(?:変数)?(?:の値)?(?:は|を)?[\s　]*(?:後で|のちに)?[\s　]*(?:本番値|実データ|正式な値)(?:に|へ)[\s　]*(?:差し替|置き換え)/u.test(after);
+}
+
+function hasExplicitBinaryCodingDefinition(definition) {
+  const oneAsCondition = /(?:^|[、，,]\s*)[1１]\s*なら\s*[^、，,]{1,24}(?=$|[、，,])/u.test(definition);
+  const zeroAsCondition = /(?:^|[、，,]\s*)[0０]\s*なら\s*[^、，,]{1,24}(?=$|[、，,])/u.test(definition);
+  if (oneAsCondition && zeroAsCondition) return true;
+
+  const oneAsAssignment = /(?:^|[、，,]\s*)[^、，,=＝:：]{1,24}\s*(?:=|＝|:|：)\s*[1１](?=$|[、，,])/u.test(definition);
+  const zeroAsAssignment = /(?:^|[、，,]\s*)[^、，,=＝:：]{1,24}\s*(?:=|＝|:|：)\s*[0０](?=$|[、，,])/u.test(definition);
+  return oneAsAssignment && zeroAsAssignment;
+}
+
+function hasParenthesizedDummyDefinition(after) {
+  const match = after.match(/^[（(]([^）)\n\r。！？!?]{1,80})[）)]\s*((?:を|は|が|の)\s*[^。！？!?\n\r]{0,24})/u);
+  if (!match) return false;
+
+  const definition = match[1];
+  const relation = match[2];
+  return hasExplicitBinaryCodingDefinition(definition)
+    && STATISTICAL_DUMMY_RELATION_PATTERN.test(relation);
+}
+
+function hasStatisticalDummyCreationContext(sentence, localIndex, length) {
+  const before = sentence.slice(Math.max(0, localIndex - 32), localIndex);
+  const after = sentence.slice(localIndex + length, localIndex + length + 16);
+
+  return /(?:カテゴリ|カテゴリー)変数から[\s　]*$/u.test(before)
+    && /^変数を[\s　]*作成/u.test(after);
+}
+
+function hasCoordinatedStatisticalDummyTerms(after) {
+  let rest = after;
+  let terms = 0;
+  let consumed = 0;
+
+  while (terms < MAX_COORDINATED_DUMMY_TERMS) {
+    const match = rest.match(COORDINATED_DUMMY_TERM_PATTERN);
+    if (!match) return false;
+
+    consumed += match[0].length;
+    if (consumed > MAX_COORDINATED_DUMMY_CHARS) return false;
+
+    terms += 1;
+    rest = rest.slice(match[0].length);
+    if (STATISTICAL_DUMMY_RELATION_PATTERN.test(rest)) return true;
+  }
+
+  return false;
+}
+
+function isStatisticalDummyTerm(text, index, length) {
+  if (text.slice(index, index + length) !== 'ダミー') return false;
+
+  const { start, end } = sentenceBounds(text, index);
+  const localIndex = index - start;
+  const sentence = text.slice(start, end);
+  const after = sentence.slice(localIndex + length);
+
+  // 本番値の代用品や後で差し替える値だと明示されている場合は、
+  // 「ダミー変数」という語形でも仮置きとして扱う。
+  if (hasExplicitDummyReplacementContext(sentence, localIndex, length)) return false;
+
+  // 変換元が近接して明示された「カテゴリ変数からダミー変数を作成」だけを
+  // 統計用法として扱い、右側の「変数を作成」だけでは抑制しない。
+  if (hasStatisticalDummyCreationContext(sentence, localIndex, length)) return true;
+
+  // 統計用語として固有の接尾語、または「ダミー変数」の直後に
+  // 統計上の操作・関係が続く場合だけ、未完成の目印から除外する。
+  if (/^(?:符号化|コーディング|コード化)/u.test(after)) return true;
+  if (STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN.test(after)) return true;
+  if (/^変数(?:に\s*(?:変換|符号化)|(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値))/u.test(after)) return true;
+
+  // 「総合型選抜ダミーを説明変数に加える」「性別ダミーの係数」のように、
+  // カテゴリ名の後ろに付く用法も統計用語として扱う。接続された別の
+  // ダミー語や、0/1定義の括弧を挟む場合も、直後の限定範囲だけを見る。
+  if (STATISTICAL_DUMMY_RELATION_PATTERN.test(after)) return true;
+  if (hasCoordinatedStatisticalDummyTerms(after)) return true;
+  return hasParenthesizedDummyDefinition(after);
+}
+
 function isMarkdownTaskCheckbox(text, index, length) {
   const { start, end } = lineBounds(text, index);
   const before = text.slice(start, index);
@@ -113,7 +209,8 @@ export const rule = {
     const generalMatches = findAll(doc.maskedText, generalRegex)
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
       .filter(match => !isMarkdownLinkLabel(doc.text, match.index, match[0].length))
-      .filter(match => !isQuotedOrExplained(doc.maskedText, match.index, match[0].length));
+      .filter(match => !isQuotedOrExplained(doc.maskedText, match.index, match[0].length))
+      .filter(match => !isStatisticalDummyTerm(doc.maskedText, match.index, match[0].length));
 
     const kokoniMatches = findAll(doc.maskedText, kokoniRegex)
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
