@@ -123,6 +123,10 @@ expectNoRule('placeholder', 'API操作は[`patch`](/docs/reference/#patch)と[`r
 expectRule('placeholder', '回答欄は[ ]のまま提出された。');
 expectNoRule('placeholder', '回帰分析では、総合型選抜ダミーを説明変数に加えた。');
 expectNoRule('placeholder', 'カテゴリ変数はダミー変数に変換した。');
+expectNoRule('placeholder', 'カテゴリ変数をダミー符号化した。');
+expectNoRule('placeholder', 'カテゴリ変数をダミーコーディングした。');
+expectNoRule('placeholder', 'カテゴリ変数をダミーコード化した。');
+expectNoRule('placeholder', '回帰式にダミー項を加えた。');
 expectNoRule('placeholder', '性別ダミーの係数を推定した。');
 expectRule('placeholder', '公開前の画面にはダミーを入れておく。');
 expectRule('placeholder', '回帰分析用の設定欄にはダミーを入れておく。');
