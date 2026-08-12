@@ -51,6 +51,10 @@ function isQuotedOrExplained(text, index, length) {
 
 const STATISTICAL_DUMMY_RELATION_PATTERN =
   /^(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u;
+const MAX_COORDINATED_DUMMY_TERMS = 5;
+const MAX_COORDINATED_DUMMY_CHARS = 160;
+const COORDINATED_DUMMY_TERM_PATTERN =
+  /^(?:と|および|及び|、)\s*[^、。！？!?\n\r]{1,24}ダミー/u;
 
 function hasExplicitDummyReplacementContext(sentence, localIndex, length) {
   const before = sentence.slice(Math.max(0, localIndex - 48), localIndex);
@@ -72,6 +76,34 @@ function hasParenthesizedDummyDefinition(after) {
     && STATISTICAL_DUMMY_RELATION_PATTERN.test(relation);
 }
 
+function hasStatisticalDummyCreationContext(sentence, localIndex, length) {
+  const before = sentence.slice(Math.max(0, localIndex - 32), localIndex);
+  const after = sentence.slice(localIndex + length, localIndex + length + 16);
+
+  return /(?:カテゴリ|カテゴリー)変数から[\s　]*$/u.test(before)
+    && /^変数を[\s　]*作成/u.test(after);
+}
+
+function hasCoordinatedStatisticalDummyTerms(after) {
+  let rest = after;
+  let terms = 0;
+  let consumed = 0;
+
+  while (terms < MAX_COORDINATED_DUMMY_TERMS) {
+    const match = rest.match(COORDINATED_DUMMY_TERM_PATTERN);
+    if (!match) return false;
+
+    consumed += match[0].length;
+    if (consumed > MAX_COORDINATED_DUMMY_CHARS) return false;
+
+    terms += 1;
+    rest = rest.slice(match[0].length);
+    if (STATISTICAL_DUMMY_RELATION_PATTERN.test(rest)) return true;
+  }
+
+  return false;
+}
+
 function isStatisticalDummyTerm(text, index, length) {
   if (text.slice(index, index + length) !== 'ダミー') return false;
 
@@ -84,6 +116,10 @@ function isStatisticalDummyTerm(text, index, length) {
   // 「ダミー変数」という語形でも仮置きとして扱う。
   if (hasExplicitDummyReplacementContext(sentence, localIndex, length)) return false;
 
+  // 変換元が近接して明示された「カテゴリ変数からダミー変数を作成」だけを
+  // 統計用法として扱い、右側の「変数を作成」だけでは抑制しない。
+  if (hasStatisticalDummyCreationContext(sentence, localIndex, length)) return true;
+
   // 統計用語として固有の接尾語、または「ダミー変数」の直後に
   // 統計上の操作・関係が続く場合だけ、未完成の目印から除外する。
   if (/^(?:符号化|コーディング|コード化|項(?!目))/u.test(after)) return true;
@@ -93,7 +129,7 @@ function isStatisticalDummyTerm(text, index, length) {
   // カテゴリ名の後ろに付く用法も統計用語として扱う。接続された別の
   // ダミー語や、0/1定義の括弧を挟む場合も、直後の限定範囲だけを見る。
   if (STATISTICAL_DUMMY_RELATION_PATTERN.test(after)) return true;
-  if (/^(?:と|および|及び|、)\s*[^、。！？!?\n\r]{1,24}ダミー(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u.test(after)) return true;
+  if (hasCoordinatedStatisticalDummyTerms(after)) return true;
   return hasParenthesizedDummyDefinition(after);
 }
 
