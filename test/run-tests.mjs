@@ -195,6 +195,46 @@ assert.equal(
   boundedQuantityUniqueText.indexOf('唯一'),
   'the remaining bounded-set finding should point to 唯一',
 );
+const arithmeticThenGuaranteeText = '各項目の合計は100%を超えるが、この教材の合格率も100%を超える。';
+const arithmeticThenGuaranteeFindings = findingsFor('absolute-claim', arithmeticThenGuaranteeText);
+assert.equal(arithmeticThenGuaranteeFindings.length, 1, 'only the guarantee percentage should remain');
+assert.equal(
+  arithmeticThenGuaranteeFindings[0].index,
+  arithmeticThenGuaranteeText.lastIndexOf('100%'),
+  'the later guarantee percentage should be detected',
+);
+const guaranteeThenArithmeticText = 'この教材の合格率は100%を超えるが、各項目の合計も100%を超える。';
+const guaranteeThenArithmeticFindings = findingsFor('absolute-claim', guaranteeThenArithmeticText);
+assert.equal(guaranteeThenArithmeticFindings.length, 1, 'only the first guarantee percentage should remain');
+assert.equal(
+  guaranteeThenArithmeticFindings[0].index,
+  guaranteeThenArithmeticText.indexOf('100%'),
+  'the first guarantee percentage should be detected',
+);
+const multipleChoiceGuaranteeText = '複数回答の設問だが、この教材を使えば合格率は100%を超える。';
+const multipleChoiceGuaranteeFindings = findingsFor('absolute-claim', multipleChoiceGuaranteeText);
+assert.equal(multipleChoiceGuaranteeFindings.length, 1, '複数回答 alone should not suppress a guarantee percentage');
+assert.equal(
+  multipleChoiceGuaranteeFindings[0].index,
+  multipleChoiceGuaranteeText.indexOf('100%'),
+  'the guarantee percentage after 複数回答 should be detected',
+);
+const generalThenBoundedText = 'すべての授業で、六つすべてが公表値と一致する。';
+const generalThenBoundedFindings = findingsFor('absolute-claim', generalThenBoundedText);
+assert.equal(generalThenBoundedFindings.length, 1, 'only the generalizing first すべて should remain');
+assert.equal(
+  generalThenBoundedFindings[0].index,
+  generalThenBoundedText.indexOf('すべて'),
+  'the first generalizing すべて should be detected',
+);
+const boundedThenGeneralText = '六つすべてが公表値と一致するが、すべての授業で有効である。';
+const boundedThenGeneralFindings = findingsFor('absolute-claim', boundedThenGeneralText);
+assert.equal(boundedThenGeneralFindings.length, 1, 'only the later generalizing すべて should remain');
+assert.equal(
+  boundedThenGeneralFindings[0].index,
+  boundedThenGeneralText.lastIndexOf('すべて'),
+  'the later generalizing すべて should be detected',
+);
 assert.equal(
   findingsFor('absolute-claim', 'この方法はすべての授業で必ず効果を出す。', {
     rules: { 'nihongo-slopless/absolute-claim': ['warning', { terms: [] }] },
