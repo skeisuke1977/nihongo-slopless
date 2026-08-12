@@ -34,7 +34,12 @@ const headingContextExclusions = [
 const numericMeasureExclusions = [
   '^(?:100%|１００％)(?:負担|担保|拠出|減税|削減|増加|減少|出資|還元|完成|消化|消費|達成|出典|気にしなく|気にしない|気にし|否定|気にしなくていい)',
   '^(?:100%|１００％)\\s*(?:手数料|出典|気)',
-  '^(?:100%|１００％)\\s*(?:を|より)?(?:超える|上回る|下回る|未満|以上|以下|以内|以外)',
+];
+
+// 100%との大小比較は、同じ文の近接範囲に加算・集計の手掛かりがある場合だけ
+// 閉じた算術結果として除外する。成果率などの保証表現は検出対象に残す。
+const closedArithmeticPercentageExclusions = [
+  '(?:足す|合計|合算|複数回答)[^。！？\\n]{0,32}(?:100%|１００％)\\s*(?:を|より)?(?:超える|上回る|下回る|未満|以上|以下|以内|以外)',
 ];
 
 // 新規: 「ほぼ必ず」「ほとんど必ず」のように強いヘッジ副詞を伴うと断定弱まる。副作用: 弱い断定を拾わない。
@@ -220,6 +225,7 @@ export const rule = {
     quoteContextExclusions,
     headingContextExclusions,
     numericMeasureExclusions,
+    closedArithmeticPercentageExclusions,
     hedgedAdverbExclusions,
     negatedAbsoluteExclusions,
     selfReferentialQuoteExclusions,
@@ -243,6 +249,7 @@ export const rule = {
     const quoteLineRegexes = buildRegexList(options.quoteContextExclusions);
     const headingLineRegexes = buildRegexList(options.headingContextExclusions);
     const numericMeasureRegexes = buildRegexList(options.numericMeasureExclusions);
+    const closedArithmeticPercentageRegexes = buildRegexList(options.closedArithmeticPercentageExclusions);
     const hedgedAdverbRegexes = buildRegexList(options.hedgedAdverbExclusions);
     const negatedAbsoluteRegexes = buildRegexList(options.negatedAbsoluteExclusions);
     const selfReferentialRegexes = buildRegexList(options.selfReferentialQuoteExclusions);
@@ -292,8 +299,12 @@ export const rule = {
       if (matchesAround(context, scopedAudienceRegexes)) return false;
       if (matchesAround(context, operationalRequirementRegexes)) return false;
       if (matchesAround(context, boundedProjectStatusRegexes)) return false;
-      if (matchesAround(context, boundedQuantityRegexes)) return false;
+      if ((matchText === 'すべて' || matchText === '全て')
+        && matchesAround(context, boundedQuantityRegexes)) return false;
       if (matchesAround(context, technicalSpecificationRegexes)) return false;
+
+      if ((matchText === '100%' || matchText === '１００％')
+        && matchesAround(context, closedArithmeticPercentageRegexes)) return false;
 
       // 量的単位: 「100%負担」「100%気にしなくていい」など
       const afterMatchFull = doc.maskedText.slice(match.index, match.index + matchText.length + 24);

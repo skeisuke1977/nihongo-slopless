@@ -173,6 +173,28 @@ assert.equal(
   1,
   'absolute-claim should keep later claims in mixed negation sentences',
 );
+const boundedQuantityOnlyText = '六つすべてが公表値と一致する。';
+assert.equal(
+  findingsFor('absolute-claim', boundedQuantityOnlyText).length,
+  0,
+  'absolute-claim should suppress a bounded-set all-quantifier',
+);
+const boundedQuantityMustText = '六つすべてが必ず公表値と一致する。';
+const boundedQuantityMustFindings = findingsFor('absolute-claim', boundedQuantityMustText);
+assert.equal(boundedQuantityMustFindings.length, 1, 'only 必ず should remain in a bounded-set sentence');
+assert.equal(
+  boundedQuantityMustFindings[0].index,
+  boundedQuantityMustText.indexOf('必ず'),
+  'the remaining bounded-set finding should point to 必ず',
+);
+const boundedQuantityUniqueText = '六つすべてが公表値と一致する唯一の方法である。';
+const boundedQuantityUniqueFindings = findingsFor('absolute-claim', boundedQuantityUniqueText);
+assert.equal(boundedQuantityUniqueFindings.length, 1, 'only 唯一 should remain in a bounded-set sentence');
+assert.equal(
+  boundedQuantityUniqueFindings[0].index,
+  boundedQuantityUniqueText.indexOf('唯一'),
+  'the remaining bounded-set finding should point to 唯一',
+);
 assert.equal(
   findingsFor('absolute-claim', 'この方法はすべての授業で必ず効果を出す。', {
     rules: { 'nihongo-slopless/absolute-claim': ['warning', { terms: [] }] },
