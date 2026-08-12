@@ -54,15 +54,27 @@ const STATISTICAL_DUMMY_RELATION_PATTERN =
 const MAX_COORDINATED_DUMMY_TERMS = 5;
 const MAX_COORDINATED_DUMMY_CHARS = 160;
 const COORDINATED_DUMMY_TERM_PATTERN =
-  /^(?:と|および|及び|、)\s*[^、。！？!?\n\r]{1,24}ダミー/u;
+  /^(?:と|および|及び|、)\s*[\p{Script=Han}々〆ヵヶ\p{Script=Katakana}ーA-Za-z0-9０-９]{1,24}ダミー/u;
+const STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN =
+  /^項(?=[\s　]*(?:$|[、，。！？!?）)\]】」』]|(?:を|は|が|の|に|へ|で|と|も|から|まで|より)))/u;
 
 function hasExplicitDummyReplacementContext(sentence, localIndex, length) {
   const before = sentence.slice(Math.max(0, localIndex - 48), localIndex);
   const after = sentence.slice(localIndex + length, localIndex + length + 96);
 
-  if (/(?:本番値|実データ|正式な値)の代わりに[\s　]*$/u.test(before)) return true;
+  if (/(?:本番値|実データ|正式な値)(?:の代わり(?:に|として)|の代替(?:に|として))[\s　]*$/u.test(before)) return true;
 
   return /^(?:変数)?(?:の値)?(?:は|を)?[\s　]*(?:後で|のちに)?[\s　]*(?:本番値|実データ|正式な値)(?:に|へ)[\s　]*(?:差し替|置き換え)/u.test(after);
+}
+
+function hasExplicitBinaryCodingDefinition(definition) {
+  const oneAsCondition = /(?:^|[、，,]\s*)[1１]\s*なら\s*[^、，,]{1,24}(?=$|[、，,])/u.test(definition);
+  const zeroAsCondition = /(?:^|[、，,]\s*)[0０]\s*なら\s*[^、，,]{1,24}(?=$|[、，,])/u.test(definition);
+  if (oneAsCondition && zeroAsCondition) return true;
+
+  const oneAsAssignment = /(?:^|[、，,]\s*)[^、，,=＝:：]{1,24}\s*(?:=|＝|:|：)\s*[1１](?=$|[、，,])/u.test(definition);
+  const zeroAsAssignment = /(?:^|[、，,]\s*)[^、，,=＝:：]{1,24}\s*(?:=|＝|:|：)\s*[0０](?=$|[、，,])/u.test(definition);
+  return oneAsAssignment && zeroAsAssignment;
 }
 
 function hasParenthesizedDummyDefinition(after) {
@@ -71,8 +83,7 @@ function hasParenthesizedDummyDefinition(after) {
 
   const definition = match[1];
   const relation = match[2];
-  return /[1１]/u.test(definition)
-    && /[0０]/u.test(definition)
+  return hasExplicitBinaryCodingDefinition(definition)
     && STATISTICAL_DUMMY_RELATION_PATTERN.test(relation);
 }
 
@@ -122,7 +133,8 @@ function isStatisticalDummyTerm(text, index, length) {
 
   // 統計用語として固有の接尾語、または「ダミー変数」の直後に
   // 統計上の操作・関係が続く場合だけ、未完成の目印から除外する。
-  if (/^(?:符号化|コーディング|コード化|項(?!目))/u.test(after)) return true;
+  if (/^(?:符号化|コーディング|コード化)/u.test(after)) return true;
+  if (STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN.test(after)) return true;
   if (/^変数(?:に\s*(?:変換|符号化)|(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値))/u.test(after)) return true;
 
   // 「総合型選抜ダミーを説明変数に加える」「性別ダミーの係数」のように、
