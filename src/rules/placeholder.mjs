@@ -49,6 +49,29 @@ function isQuotedOrExplained(text, index, length) {
   return isInsideQuote(text, index, length) || isExplainedAsExample(text, index, length);
 }
 
+const STATISTICAL_DUMMY_RELATION_PATTERN =
+  /^(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u;
+
+function hasExplicitDummyReplacementContext(sentence, localIndex, length) {
+  const before = sentence.slice(Math.max(0, localIndex - 48), localIndex);
+  const after = sentence.slice(localIndex + length, localIndex + length + 96);
+
+  if (/(?:本番値|実データ|正式な値)の代わりに[\s　]*$/u.test(before)) return true;
+
+  return /^(?:変数)?(?:の値)?(?:は|を)?[\s　]*(?:後で|のちに)?[\s　]*(?:本番値|実データ|正式な値)(?:に|へ)[\s　]*(?:差し替|置き換え)/u.test(after);
+}
+
+function hasParenthesizedDummyDefinition(after) {
+  const match = after.match(/^[（(]([^）)\n\r。！？!?]{1,80})[）)]\s*((?:を|は|が|の)\s*[^。！？!?\n\r]{0,24})/u);
+  if (!match) return false;
+
+  const definition = match[1];
+  const relation = match[2];
+  return /[1１]/u.test(definition)
+    && /[0０]/u.test(definition)
+    && STATISTICAL_DUMMY_RELATION_PATTERN.test(relation);
+}
+
 function isStatisticalDummyTerm(text, index, length) {
   if (text.slice(index, index + length) !== 'ダミー') return false;
 
@@ -57,14 +80,21 @@ function isStatisticalDummyTerm(text, index, length) {
   const sentence = text.slice(start, end);
   const after = sentence.slice(localIndex + length);
 
-  // 「ダミー変数」「ダミー符号化」のように、ダミーが統計用語の
-  // 一部になっている場合は、未完成の目印として扱わない。
-  if (/^(?:変数|符号化|コーディング|コード化|項(?!目))/u.test(after)) return true;
+  // 本番値の代用品や後で差し替える値だと明示されている場合は、
+  // 「ダミー変数」という語形でも仮置きとして扱う。
+  if (hasExplicitDummyReplacementContext(sentence, localIndex, length)) return false;
+
+  // 統計用語として固有の接尾語、または「ダミー変数」の直後に
+  // 統計上の操作・関係が続く場合だけ、未完成の目印から除外する。
+  if (/^(?:符号化|コーディング|コード化|項(?!目))/u.test(after)) return true;
+  if (/^変数(?:に\s*(?:変換|符号化)|(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値))/u.test(after)) return true;
 
   // 「総合型選抜ダミーを説明変数に加える」「性別ダミーの係数」のように、
-  // カテゴリ名の後ろに付く用法も統計用語として扱う。単に
-  // 「ダミーを入れておく」は抑制しないよう、直後の統計語を必須にする。
-  return /^(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u.test(after);
+  // カテゴリ名の後ろに付く用法も統計用語として扱う。接続された別の
+  // ダミー語や、0/1定義の括弧を挟む場合も、直後の限定範囲だけを見る。
+  if (STATISTICAL_DUMMY_RELATION_PATTERN.test(after)) return true;
+  if (/^(?:と|および|及び|、)\s*[^、。！？!?\n\r]{1,24}ダミー(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値)/u.test(after)) return true;
+  return hasParenthesizedDummyDefinition(after);
 }
 
 function isMarkdownTaskCheckbox(text, index, length) {

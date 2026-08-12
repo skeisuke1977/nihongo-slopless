@@ -128,7 +128,13 @@ expectNoRule('placeholder', 'カテゴリ変数をダミーコーディングし
 expectNoRule('placeholder', 'カテゴリ変数をダミーコード化した。');
 expectNoRule('placeholder', '回帰式にダミー項を加えた。');
 expectNoRule('placeholder', '性別ダミーの係数を推定した。');
+expectNoRule('placeholder', '性別ダミーと地域ダミーを説明変数に加えた。');
+expectNoRule('placeholder', '処置群ダミー（1なら処置群、0なら対照群）の係数を推定した。');
+expectNoRule('placeholder', '処置群ダミー（処置群=1、対照群=0）を回帰モデルに加えた。');
 expectRule('placeholder', '公開前の画面にはダミーを入れておく。');
+expectRule('placeholder', '公開前は本番値の代わりにダミー変数を入力しておく。');
+expectRule('placeholder', 'ダミー変数の値は後で本番値に差し替える。');
+expectRule('placeholder', '回帰分析用の設定欄には、本番値の代わりにダミー変数を入力しておく。');
 expectRule('placeholder', '回帰分析用の設定欄にはダミーを入れておく。');
 expectRule('placeholder', '公開前のフォームにはダミー項目を残した。');
 expectRule('citation-needed', '近年、生成AIの利用は急速に広がっている。');
