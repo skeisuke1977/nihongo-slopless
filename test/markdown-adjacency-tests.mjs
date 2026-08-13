@@ -517,5 +517,47 @@ export function runMarkdownAdjacencyTests() {
     equal(findings.length, 0, 'escaped dollar remains a local custom suffix pattern');
   }
 
+  const customActionSuffixFindings = (text, pattern) => {
+    const config = onlyRuleConfig('deadline-missing');
+    config.rules['deadline-missing'] = ['warning', { actionSuffixExclusionPatterns: [pattern] }];
+    return lintText(text, { filePath: '<markdown-adjacency-test>', config }).messages
+      .filter(message => message.ruleId === 'nihongo-slopless/deadline-missing');
+  };
+  const capabilityWithLongTail = '申請フローを改善することができる仕組みであり、担当者が日常的に利用します。';
+  const incompleteScope = `設計し、作り、動かし、評価して改善するところまでが入る${' '.repeat(32)}と説明した。`;
+
+  equal(
+    customActionSuffixFindings(capabilityWithLongTail, 'ことができる|ところまでが入る\\s*$').length,
+    0,
+    'mixed custom suffix keeps local first alternative on incomplete view',
+  );
+  {
+    const findings = customActionSuffixFindings(incompleteScope, '(?:ところまでが入る\\s*$)');
+    equal(findings.length, 1, 'parenthesized terminal custom suffix does not match incomplete view');
+    equal(findings[0]?.index, incompleteScope.indexOf('改善する'), 'parenthesized terminal custom suffix index');
+    equal(findings[0]?.length, '改善する'.length, 'parenthesized terminal custom suffix length');
+  }
+  equal(
+    customActionSuffixFindings(capabilityWithLongTail, 'ところまでが入る\\s*$|ことができる').length,
+    0,
+    'mixed custom suffix keeps local later alternative on incomplete view',
+  );
+  {
+    const findings = customActionSuffixFindings(incompleteScope, 'ところまでが入る\\s*$|ことができる');
+    equal(findings.length, 1, 'leading terminal alternative does not match incomplete view');
+    equal(findings[0]?.index, incompleteScope.indexOf('改善する'), 'leading terminal alternative index');
+    equal(findings[0]?.length, '改善する'.length, 'leading terminal alternative length');
+  }
+  equal(
+    customActionSuffixFindings('当社は申請フローを改善すること$を説明した。', 'こと\\$').length,
+    0,
+    'escaped literal dollar remains a local custom suffix',
+  );
+  equal(
+    customActionSuffixFindings('設計し、作り、動かし、評価して改善するところまでが入る。', '(?:ところまでが入る\\s*$)').length,
+    0,
+    'parenthesized terminal custom suffix matches complete view',
+  );
+
   return assertions;
 }

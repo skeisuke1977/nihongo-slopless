@@ -19,14 +19,7 @@
 
 import { stringList } from '../utils.mjs';
 
-function hasTerminalAnchor(pattern) {
-  const source = pattern.trimEnd();
-  if (!source.endsWith('$')) return false;
-
-  let slashes = 0;
-  for (let index = source.length - 2; index >= 0 && source[index] === '\\'; index -= 1) slashes += 1;
-  return slashes % 2 === 0;
-}
+const INCOMPLETE_VIEW_SENTINEL = '\uE000\uE001';
 
 // 検出対象となる対応・行動述語のパターン。
 // 各パターンは「(述語語幹)(語形変化を含む末尾)」の形にする。
@@ -179,6 +172,16 @@ function buildAnchoredRegex(values, suffix = '', prefix = '') {
   return source ? new RegExp(`${prefix}(?:${source})${suffix}`, 'u') : null;
 }
 
+function matchesActionSuffix(afterView, completeRegex, incompleteRegex) {
+  if (afterView.complete) {
+    if (completeRegex?.test(afterView.text)) return true;
+    const beforeSentenceTerminator = afterView.text.replace(/[。！？!?](?=\s*$)/u, '');
+    return beforeSentenceTerminator !== afterView.text && completeRegex?.test(beforeSentenceTerminator);
+  }
+
+  return incompleteRegex?.test(afterView.text + INCOMPLETE_VIEW_SENTINEL) ?? false;
+}
+
 export const rule = {
   id: 'deadline-missing',
   defaultSeverity: 'warning',
@@ -206,9 +209,7 @@ export const rule = {
     const deadlineSource = buildSourceUnion(options.deadlinePatterns);
     const negationSource = buildSourceUnion(options.negationPatterns);
     const sentenceExclusionSource = buildSourceUnion(options.sentenceExclusionPatterns);
-    const actionSuffixPatterns = stringList(options.actionSuffixExclusionPatterns);
-    const localActionSuffixSource = buildSourceUnion(actionSuffixPatterns.filter(pattern => !hasTerminalAnchor(pattern)));
-    const terminalActionSuffixSource = buildSourceUnion(actionSuffixPatterns.filter(hasTerminalAnchor));
+    const actionSuffixSource = buildSourceUnion(options.actionSuffixExclusionPatterns);
     const abstractProgressObjectSource = buildSourceUnion(options.abstractProgressObjects);
     const learningProgressContextSource = buildSourceUnion(options.learningProgressContextPatterns);
     const learningProgressBeforeRegex = buildAnchoredRegex(
@@ -237,11 +238,11 @@ export const rule = {
     const sentenceExclusionRegex = sentenceExclusionSource
       ? new RegExp(sentenceExclusionSource, 'u')
       : null;
-    const localActionSuffixExclusionRegex = localActionSuffixSource
-      ? new RegExp(`^(?:${localActionSuffixSource})`, 'u')
+    const completeActionSuffixExclusionRegex = actionSuffixSource
+      ? new RegExp(`^(?:${actionSuffixSource})`, 'u')
       : null;
-    const terminalActionSuffixExclusionRegex = terminalActionSuffixSource
-      ? new RegExp(`^(?:${terminalActionSuffixSource})`, 'u')
+    const incompleteActionSuffixExclusionRegex = actionSuffixSource
+      ? new RegExp(`^(?:${actionSuffixSource})(?=[\\s\\S]*${INCOMPLETE_VIEW_SENTINEL}$)`, 'u')
       : null;
     const abstractProgressObjectRegex = abstractProgressObjectSource
       ? new RegExp(`(?:${abstractProgressObjectSource})\\s*を\\s*$`, 'u')
@@ -316,14 +317,11 @@ export const rule = {
         }
 
         // 能力説明、抽象的な重要性評価、単なる方針表明は期限つき対応要求ではない。
-        if (localActionSuffixExclusionRegex && localActionSuffixExclusionRegex.test(afterChunk)) {
-          continue;
-        }
-        if (
-          afterView.complete &&
-          terminalActionSuffixExclusionRegex &&
-          terminalActionSuffixExclusionRegex.test(afterChunk)
-        ) {
+        if (matchesActionSuffix(
+          afterView,
+          completeActionSuffixExclusionRegex,
+          incompleteActionSuffixExclusionRegex,
+        )) {
           continue;
         }
 
