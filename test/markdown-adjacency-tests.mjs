@@ -225,27 +225,66 @@ export function runMarkdownAdjacencyTests() {
   }
 
   {
-    const invalid = '前[ダミー](not a url)後';
-    const invalidView = createMarkdownAdjacency(invalid).after(0, {
-      maxViewChars: invalid.length,
-      maxSourceOffset: invalid.length,
-    });
-    equal(invalidView.text, invalid, 'invalid bare link destination stays literal');
-    deepEqual(invalidView.sourceOffsets, Array.from({ length: invalid.length }, (_, index) => index), 'invalid bare link source offsets stay unchanged');
+    const malformedDestinations = [
+      'not a url',
+      'foo<bar',
+      'foo>bar',
+      'foo(bar)',
+      'foo(bar',
+      String.raw`foo\)bar`,
+      String.raw`foo\bar`,
+    ];
+    for (const destination of malformedDestinations) {
+      const invalid = `前[ダミー](${destination})後`;
+      const invalidView = createMarkdownAdjacency(invalid).after(0, {
+        maxViewChars: invalid.length,
+        maxSourceOffset: invalid.length,
+      });
+      equal(invalidView.text, invalid, `unsupported bare link destination stays literal: ${destination}`);
+      deepEqual(
+        invalidView.sourceOffsets,
+        Array.from({ length: invalid.length }, (_, index) => index),
+        `unsupported bare link source offsets stay unchanged: ${destination}`,
+      );
+      ok(
+        invalidView.sourceOffsets.every((offset, index, offsets) => (
+          offset >= 0 && offset < invalid.length && (index === 0 || offsets[index - 1] < offset)
+        )),
+        `unsupported bare link offsets are unique, monotonic, and in range: ${destination}`,
+      );
+      equal(invalidView.sourceStart, 0, `unsupported bare link sourceStart: ${destination}`);
+      equal(invalidView.sourceEnd, invalid.length, `unsupported bare link sourceEnd: ${destination}`);
+    }
 
-    for (const valid of [
-      '前[ダミー]()後',
-      '前[ダミー](relative-path)後',
-      '前[ダミー](https://example.invalid)後',
-      '前[ダミー](<not a url>)後',
+    for (const destination of [
+      '',
+      'relative-path',
+      'https://example.invalid/path',
+      'foo-bar_baz?q=1#section',
+      'foo%28bar%29',
+      '日本語パス',
+      '<not a url>',
+      '<path with spaces>',
+      '<>',
     ]) {
+      const valid = `前[ダミー](${destination})後`;
       const view = createMarkdownAdjacency(valid).after(0, {
         maxViewChars: valid.length,
         maxSourceOffset: valid.length,
       });
-      equal(view.text, '前ダミー後', `valid inline link destination is hidden: ${valid}`);
-      ok(!view.text.includes('url') && !view.text.includes('relative'), `valid destination is absent from view: ${valid}`);
-      equal(view.sourceOffsets.length, '前ダミー後'.length, `valid destination source offset count: ${valid}`);
+      const labelStart = valid.indexOf('ダミー');
+      const labelEnd = labelStart + 'ダミー'.length;
+      const afterStart = valid.length - 1;
+      const expectedOffsets = [
+        0,
+        ...Array.from({ length: 'ダミー'.length }, (_, index) => labelStart + index),
+        afterStart,
+      ];
+      equal(view.text, '前ダミー後', `valid inline link destination is hidden: ${destination}`);
+      deepEqual(view.sourceOffsets, expectedOffsets, `valid destination keeps visible UTF-16 offsets: ${destination}`);
+      equal(view.sourceStart, 0, `valid destination sourceStart: ${destination}`);
+      equal(view.sourceEnd, valid.length, `valid destination sourceEnd: ${destination}`);
+      equal(valid.slice(labelStart, labelEnd), 'ダミー', `valid destination preserves label source range: ${destination}`);
     }
   }
 
@@ -637,13 +676,30 @@ export function runMarkdownAdjacencyTests() {
     equal(findings[0]?.length, '改善する'.length, `intraword future action length: ${text}`);
   }
 
-  for (const fixture of [
+  const malformedDestinationFixtures = [
+    'カテゴリ変数から[ダミー](foo<bar)変数を作成した。',
+    'カテゴリ変数から[ダミー](foo>bar)変数を作成した。',
+    'カテゴリ変数から[ダミー](foo(bar))変数を作成した。',
+    'カテゴリ変数から[ダミー](foo(bar)変数を作成した。',
+    String.raw`カテゴリ変数から[ダミー](foo\)bar)変数を作成した。`,
+    String.raw`カテゴリ変数から[ダミー](foo\bar)変数を作成した。`,
+  ];
+  const validDestinationFixtures = [
+    'カテゴリ変数から[ダミー]()変数を作成した。',
+    'カテゴリ変数から[ダミー](relative-path)変数を作成した。',
+    'カテゴリ変数から[ダミー](https://example.invalid/path)変数を作成した。',
+    'カテゴリ変数から[ダミー](foo-bar_baz?q=1#section)変数を作成した。',
+    'カテゴリ変数から[ダミー](foo%28bar%29)変数を作成した。',
+    'カテゴリ変数から[ダミー](日本語パス)変数を作成した。',
+    'カテゴリ変数から[ダミー](<not a url>)変数を作成した。',
+    'カテゴリ変数から[ダミー](<path with spaces>)変数を作成した。',
+    'カテゴリ変数から[ダミー](<>)変数を作成した。',
+  ];
+  for (const [text, expected] of [
     ['カテゴリ変数から[ダミー](not a url)変数を作成した。', 1],
-    ['カテゴリ変数から[ダミー](relative-path)変数を作成した。', 0],
-    ['カテゴリ変数から[ダミー](<not a url>)変数を作成した。', 0],
-    ['カテゴリ変数から[ダミー]()変数を作成した。', 0],
+    ...malformedDestinationFixtures.map(text => [text, 1]),
+    ...validDestinationFixtures.map(text => [text, 0]),
   ]) {
-    const [text, expected] = fixture;
     const findings = findingsFor('placeholder', text);
     equal(findings.length, expected, `valid/invalid inline destination boundary: ${text}`);
     if (expected === 1) {

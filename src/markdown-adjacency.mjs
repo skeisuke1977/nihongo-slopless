@@ -60,7 +60,7 @@ function isUnicodeWordCharacter(value) {
 function isSupportedInlineDestination(destination) {
   if (destination === '') return true;
   if (/^<[^<>\n]*>$/u.test(destination)) return true;
-  return !/\s/u.test(destination);
+  return !/[\s<>()\\\u0000-\u001F\u007F]/u.test(destination);
 }
 
 function collectInlinePresentationRanges(text, kinds) {
