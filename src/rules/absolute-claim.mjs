@@ -190,17 +190,23 @@ function matchesAround(aroundText, regexes) {
 }
 
 function matchesAtCurrentPosition(
-  context,
-  relativeIndex,
-  matchText,
+  doc,
+  matchIndex,
+  matchLength,
+  sourceBounds,
   beforeRegexes,
   afterRegexes,
   { beforeChars = 32, afterChars = 32 } = {},
 ) {
-  const before = context.slice(Math.max(0, relativeIndex - beforeChars), relativeIndex);
-  const afterStart = relativeIndex + matchText.length;
-  const after = context.slice(afterStart, Math.min(context.length, afterStart + afterChars));
-  return matchesAfter(before, beforeRegexes) && matchesAfter(after, afterRegexes);
+  const before = doc.adjacency.before(matchIndex, {
+    maxViewChars: beforeChars,
+    minSourceOffset: sourceBounds.start,
+  });
+  const after = doc.adjacency.after(matchIndex + matchLength, {
+    maxViewChars: afterChars,
+    maxSourceOffset: sourceBounds.end,
+  });
+  return matchesAfter(before.text, beforeRegexes) && matchesAfter(after.text, afterRegexes);
 }
 
 function isMarkdownListLine(line) {
@@ -334,18 +340,20 @@ export const rule = {
       if (matchesAround(context, operationalRequirementRegexes)) return false;
       if (matchesAround(context, boundedProjectStatusRegexes)) return false;
       if ((matchText === 'すべて' || matchText === '全て') && matchesAtCurrentPosition(
-        context,
-        relativeIndex,
-        matchText,
+        doc,
+        match.index,
+        matchText.length,
+        { start: contextStart, end: contextStart + context.length },
         boundedQuantityBeforeRegexes,
         boundedQuantityAfterRegexes,
       )) return false;
       if (matchesAround(context, technicalSpecificationRegexes)) return false;
 
       if ((matchText === '100%' || matchText === '１００％') && matchesAtCurrentPosition(
-        context,
-        relativeIndex,
-        matchText,
+        doc,
+        match.index,
+        matchText.length,
+        { start: contextStart, end: contextStart + context.length },
         closedArithmeticPercentageBeforeRegexes,
         percentageComparisonAfterRegexes,
       )) return false;

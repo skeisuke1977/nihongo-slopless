@@ -1,6 +1,7 @@
 import { buildLineStarts, hasJapanese, isMostlyNumericOrSymbol } from './utils.mjs';
 import { markdownCodeBlockRanges, parseDisableRanges } from './ignore.mjs';
 import { ignorePatternRanges } from './ignore-patterns.mjs';
+import { createMarkdownAdjacency } from './markdown-adjacency.mjs';
 
 function maskRange(chars, start, end) {
   for (let i = start; i < end && i < chars.length; i += 1) {
@@ -154,30 +155,43 @@ function splitStructureBlocks(maskedText) {
 
 function maskMarkdown(text, { ignoredRanges = [] } = {}) {
   const chars = text.split('');
+  const opaqueRanges = [];
+  const semanticRanges = [];
+
+  const maskOpaqueRange = (start, end) => {
+    opaqueRanges.push({ start, end });
+    maskRange(chars, start, end);
+  };
 
   // YAML front matter
   const yamlFrontMatterRange = findYamlFrontMatterRange(text);
-  if (yamlFrontMatterRange) maskRange(chars, yamlFrontMatterRange.start, yamlFrontMatterRange.end);
+  if (yamlFrontMatterRange) maskOpaqueRange(yamlFrontMatterRange.start, yamlFrontMatterRange.end);
 
   // Markdown code blocks
   for (const range of markdownCodeBlockRanges(text)) {
-    maskRange(chars, range.start, range.end);
+    maskOpaqueRange(range.start, range.end);
   }
 
   // HTML comments
   for (const match of text.matchAll(/<!--[\s\S]*?-->/gu)) {
-    maskRange(chars, match.index, match.index + match[0].length);
+    maskOpaqueRange(match.index, match.index + match[0].length);
   }
 
   // Hugo-style shortcodes are template syntax, not prose. Keep surrounding
   // body text visible while removing attributes such as figure captions or
   // glossary IDs from sentence-length and paragraph heuristics.
   for (const match of text.matchAll(/\{\{[<%][^\n]*?[>%]\}\}/gu)) {
+    const visibleText = visibleHugoShortcodeText(match[0]);
+    const visibleEnd = match.index + visibleText.length;
+    if (visibleText) semanticRanges.push({ start: match.index, end: visibleEnd });
+    if (visibleEnd < match.index + match[0].length) {
+      opaqueRanges.push({ start: visibleEnd, end: match.index + match[0].length });
+    }
     maskRangeKeepingPrefix(
       chars,
       match.index,
       match.index + match[0].length,
-      visibleHugoShortcodeText(match[0]),
+      visibleText,
     );
   }
 
@@ -185,17 +199,17 @@ function maskMarkdown(text, { ignoredRanges = [] } = {}) {
   // template expressions are source syntax, not prose. Hugo shortcodes are
   // handled above because their explicit text="..." attribute is visible text.
   for (const match of text.matchAll(/\{\{(?![<%])[^\n]*?\}\}/gu)) {
-    maskRange(chars, match.index, match.index + match[0].length);
+    maskOpaqueRange(match.index, match.index + match[0].length);
   }
 
   // Inline code spans
   for (const match of text.matchAll(/`[^`\n]+`/gu)) {
-    maskRange(chars, match.index, match.index + match[0].length);
+    maskOpaqueRange(match.index, match.index + match[0].length);
   }
 
   // Markdown image alt and URL; prose lint should not inspect image syntax.
   for (const match of text.matchAll(/!\[[^\]]*\]\([^)]*\)/gu)) {
-    maskRange(chars, match.index, match.index + match[0].length);
+    maskOpaqueRange(match.index, match.index + match[0].length);
   }
 
   // Markdown link URL part, keeping visible anchor text.
@@ -206,10 +220,10 @@ function maskMarkdown(text, { ignoredRanges = [] } = {}) {
   }
 
   for (const range of ignoredRanges) {
-    maskRange(chars, range.start, range.end);
+    maskOpaqueRange(range.start, range.end);
   }
 
-  return chars.join('');
+  return { maskedText: chars.join(''), opaqueRanges, semanticRanges };
 }
 
 function maskAdditionalRanges(text, ranges) {
@@ -296,13 +310,18 @@ function splitParagraphs(maskedText, sentences, blocks) {
 
 export function prepareMarkdown(text, { filePath = '<text>', ignorePatterns = [] } = {}) {
   const ignoredRanges = ignorePatternRanges(text, ignorePatterns);
-  const maskedText = maskMarkdown(text, { ignoredRanges });
+  const { maskedText, opaqueRanges, semanticRanges } = maskMarkdown(text, { ignoredRanges });
   const lineStarts = buildLineStarts(text);
   const structureBlocks = splitStructureBlocks(maskedText);
   const sentences = annotateSentenceSections(text, splitSentences(maskedText, structureBlocks));
   const paragraphs = splitParagraphs(maskedText, sentences, structureBlocks);
   const disableRanges = [...parseDisableRanges(text), ...ignoredRanges];
   const redactedText = maskAdditionalRanges(maskedText, disableRanges);
+  const adjacency = createMarkdownAdjacency(text, {
+    opaqueRanges: [...opaqueRanges, ...disableRanges],
+    semanticText: maskedText,
+    semanticRanges,
+  });
   return {
     filePath,
     text,
@@ -314,5 +333,6 @@ export function prepareMarkdown(text, { filePath = '<text>', ignorePatterns = []
     structureBlocks,
     disableRanges,
     ignoredRanges,
+    adjacency,
   };
 }

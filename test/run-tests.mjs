@@ -9,6 +9,7 @@ import { prepareMarkdown } from '../src/markdown.mjs';
 import { PROFILE_NAMES, loadProfileConfig, mergeConfigs, normalizeProfileName } from '../src/profiles.mjs';
 import { VERSION } from '../src/version.mjs';
 import { runExtractorTests } from './extractor-tests.mjs';
+import { runMarkdownAdjacencyTests } from './markdown-adjacency-tests.mjs';
 
 function ruleIds(text, config = {}) {
   return new Set(lintText(text, { filePath: '<test>', config }).messages.map(m => m.ruleId));
@@ -1795,6 +1796,9 @@ assert.deepEqual(generalProfileCountsFile.countExcesses, []);
 assert.deepEqual(generalProfileCountsFile.countShortfalls, []);
 
 await runExtractorTests();
+
+const markdownAdjacencyAssertions = runMarkdownAdjacencyTests();
+console.log(`ok - markdown adjacency direct assertions: ${markdownAdjacencyAssertions}`);
 
 // -------------------------------------------------------------------------
 // test/cases/<rule-name>.cases.mjs を動的に読み込んで rule-bound 検証を行う。

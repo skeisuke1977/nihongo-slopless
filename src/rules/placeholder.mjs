@@ -56,11 +56,18 @@ const MAX_COORDINATED_DUMMY_CHARS = 160;
 const COORDINATED_DUMMY_TERM_PATTERN =
   /^(?:と|および|及び|、)\s*[\p{Script=Han}々〆ヵヶ\p{Script=Katakana}ーA-Za-z0-9０-９]{1,24}ダミー/u;
 const STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN =
-  /^項(?=[\s　]*(?:$|[、，。！？!?）)\]】」』]|(?:を|は|が|の|に|へ|で|と|も|から|まで|より)))/u;
+  /^項(?=[\s　]*(?:[、，。！？!?）)\]】」』]|(?:を|は|が|の|に|へ|で|と|も|から|まで|より)))/u;
+const STATISTICAL_DUMMY_ITEM_TERMINAL_PATTERN = /^項[\s　]*$/u;
 
-function hasExplicitDummyReplacementContext(sentence, localIndex, length) {
-  const before = sentence.slice(Math.max(0, localIndex - 48), localIndex);
-  const after = sentence.slice(localIndex + length, localIndex + length + 96);
+function hasExplicitDummyReplacementContext(doc, index, length, bounds) {
+  const before = doc.adjacency.before(index, {
+    maxViewChars: 48,
+    minSourceOffset: bounds.start,
+  }).text;
+  const after = doc.adjacency.after(index + length, {
+    maxViewChars: 96,
+    maxSourceOffset: bounds.end,
+  }).text;
 
   if (/(?:本番値|実データ|正式な値)(?:の代わり(?:に|として)|の代替(?:に|として))[\s　]*$/u.test(before)) return true;
 
@@ -87,9 +94,15 @@ function hasParenthesizedDummyDefinition(after) {
     && STATISTICAL_DUMMY_RELATION_PATTERN.test(relation);
 }
 
-function hasStatisticalDummyCreationContext(sentence, localIndex, length) {
-  const before = sentence.slice(Math.max(0, localIndex - 32), localIndex);
-  const after = sentence.slice(localIndex + length, localIndex + length + 16);
+function hasStatisticalDummyCreationContext(doc, index, length, bounds) {
+  const before = doc.adjacency.before(index, {
+    maxViewChars: 32,
+    minSourceOffset: bounds.start,
+  }).text;
+  const after = doc.adjacency.after(index + length, {
+    maxViewChars: 16,
+    maxSourceOffset: bounds.end,
+  }).text;
 
   return /(?:カテゴリ|カテゴリー)変数から[\s　]*$/u.test(before)
     && /^変数を[\s　]*作成/u.test(after);
@@ -115,26 +128,29 @@ function hasCoordinatedStatisticalDummyTerms(after) {
   return false;
 }
 
-function isStatisticalDummyTerm(text, index, length) {
-  if (text.slice(index, index + length) !== 'ダミー') return false;
+function isStatisticalDummyTerm(doc, index, length) {
+  if (doc.maskedText.slice(index, index + length) !== 'ダミー') return false;
 
-  const { start, end } = sentenceBounds(text, index);
-  const localIndex = index - start;
-  const sentence = text.slice(start, end);
-  const after = sentence.slice(localIndex + length);
+  const bounds = sentenceBounds(doc.maskedText, index);
+  const afterView = doc.adjacency.after(index + length, {
+    maxViewChars: MAX_COORDINATED_DUMMY_CHARS + 32,
+    maxSourceOffset: bounds.end,
+  });
+  const after = afterView.text;
 
   // 本番値の代用品や後で差し替える値だと明示されている場合は、
   // 「ダミー変数」という語形でも仮置きとして扱う。
-  if (hasExplicitDummyReplacementContext(sentence, localIndex, length)) return false;
+  if (hasExplicitDummyReplacementContext(doc, index, length, bounds)) return false;
 
   // 変換元が近接して明示された「カテゴリ変数からダミー変数を作成」だけを
   // 統計用法として扱い、右側の「変数を作成」だけでは抑制しない。
-  if (hasStatisticalDummyCreationContext(sentence, localIndex, length)) return true;
+  if (hasStatisticalDummyCreationContext(doc, index, length, bounds)) return true;
 
   // 統計用語として固有の接尾語、または「ダミー変数」の直後に
   // 統計上の操作・関係が続く場合だけ、未完成の目印から除外する。
   if (/^(?:符号化|コーディング|コード化)/u.test(after)) return true;
   if (STATISTICAL_DUMMY_ITEM_SUFFIX_PATTERN.test(after)) return true;
+  if (afterView.complete && STATISTICAL_DUMMY_ITEM_TERMINAL_PATTERN.test(after)) return true;
   if (/^変数(?:に\s*(?:変換|符号化)|(?:を|は|が|の)\s*(?:説明変数|独立変数|従属変数|共変量|回帰(?:式|モデル)?|係数|オッズ比|推定値))/u.test(after)) return true;
 
   // 「総合型選抜ダミーを説明変数に加える」「性別ダミーの係数」のように、
@@ -210,7 +226,7 @@ export const rule = {
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
       .filter(match => !isMarkdownLinkLabel(doc.text, match.index, match[0].length))
       .filter(match => !isQuotedOrExplained(doc.maskedText, match.index, match[0].length))
-      .filter(match => !isStatisticalDummyTerm(doc.maskedText, match.index, match[0].length));
+      .filter(match => !isStatisticalDummyTerm(doc, match.index, match[0].length));
 
     const kokoniMatches = findAll(doc.maskedText, kokoniRegex)
       .filter(match => !isMarkdownTaskCheckbox(doc.maskedText, match.index, match[0].length))
