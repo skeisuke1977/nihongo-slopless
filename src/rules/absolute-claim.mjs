@@ -36,6 +36,21 @@ const numericMeasureExclusions = [
   '^(?:100%|１００％)\\s*(?:手数料|出典|気)',
 ];
 
+const boundedNumberPattern = '(?:[0-9０-９]+|[一二三四五六七八九十百]+)';
+const boundedCounterPattern = '(?:つ|個|件|人|名|校|社|台|本|枚|冊|組|群|種類|項目|値|選択肢|回答|ケース)';
+const boundedOperandPattern = `${boundedNumberPattern}${boundedCounterPattern}`;
+const namedAggregationOperandPattern = `(?:${boundedOperandPattern}|各(?:項目|値|選択肢|回答|ケース))`;
+
+// 100%との大小比較は、現在の100%へ直接つながる加算・集計の手掛かりと、
+// 直後の比較表現がそろう場合だけ閉じた算術結果として除外する。
+const closedArithmeticPercentageBeforeExclusions = [
+  `(?:${boundedOperandPattern}\\s*を\\s*(?:足す(?:と|場合)?|(?:合計|合算)する(?:と|場合)?)|${namedAggregationOperandPattern}\\s*の\\s*(?:合計|合算))(?:が|は|も|で)?\\s*$`,
+];
+
+const percentageComparisonAfterExclusions = [
+  '^\\s*(?:を|より)?(?:超える|上回る|下回る|未満|以上|以下|以内|以外)',
+];
+
 // 新規: 「ほぼ必ず」「ほとんど必ず」のように強いヘッジ副詞を伴うと断定弱まる。副作用: 弱い断定を拾わない。
 const hedgedAdverbExclusions = [
   '(?:ほぼ|ほとんど|概ね|おおむね|だいたい|大抵|たいてい|多くの場合|ほぼ確実に)\\s*(?:必ず|確実に|絶対に|例外なく)',
@@ -90,6 +105,18 @@ const boundedProjectStatusExclusions = [
   '(?:A\\d|seed\\s*goldset|goldset|baseline|ルール|件|文書|ケース)[^。！？\\n]{0,48}(?:すべて|全て|完全に)[^。！？\\n]{0,32}(?:維持|PASS|pass|一致|動作確認|確認)',
   '(?:manifest|マニフェスト)[^。！？\\n]{0,32}(?:唯一)[^。！？\\n]{0,24}(?:入力|ソース|対象)',
   '唯一[^。！？\\n]{0,24}(?:完走分|採用分|入力|ソース)',
+];
+
+// 個数が明示された有限集合の照合結果は、対象範囲が閉じているため成果保証や
+// 一般化とは分ける。文境界内の短い距離に限定し、単に同じ文に数字や
+// 「すべて」があるだけでは抑制しない。
+const boundedQuantityBeforeExclusions = [
+  `${boundedOperandPattern}(?:の(?:値|項目))?\\s*$`,
+];
+
+const boundedResultVerbPattern = '(?:する|した|している|します|しました|しています|できる|できた|できている|できます|できました|できています)';
+const boundedQuantityAfterExclusions = [
+  `^\\s*(?:が|は|を)?[^。！？\\n]{0,24}(?:(?:公表値|元データ|原資料|記録|計算結果|期待値|実測値)と)?(?:一致|再現|該当)${boundedResultVerbPattern}`,
 ];
 
 // 新規: 技術仕様・定義文脈の対象全称は除外。副作用: 技術語を含む短い保証文の一部を拾わない。
@@ -162,6 +189,20 @@ function matchesAround(aroundText, regexes) {
   return regexes.some(re => re.test(aroundText));
 }
 
+function matchesAtCurrentPosition(
+  context,
+  relativeIndex,
+  matchText,
+  beforeRegexes,
+  afterRegexes,
+  { beforeChars = 32, afterChars = 32 } = {},
+) {
+  const before = context.slice(Math.max(0, relativeIndex - beforeChars), relativeIndex);
+  const afterStart = relativeIndex + matchText.length;
+  const after = context.slice(afterStart, Math.min(context.length, afterStart + afterChars));
+  return matchesAfter(before, beforeRegexes) && matchesAfter(after, afterRegexes);
+}
+
 function isMarkdownListLine(line) {
   return /^\s{0,3}(?:[-*+]|\d+[.)])\s+/.test(line);
 }
@@ -212,6 +253,8 @@ export const rule = {
     quoteContextExclusions,
     headingContextExclusions,
     numericMeasureExclusions,
+    closedArithmeticPercentageBeforeExclusions,
+    percentageComparisonAfterExclusions,
     hedgedAdverbExclusions,
     negatedAbsoluteExclusions,
     selfReferentialQuoteExclusions,
@@ -221,6 +264,8 @@ export const rule = {
     scopedAudienceExclusions,
     operationalRequirementExclusions,
     boundedProjectStatusExclusions,
+    boundedQuantityBeforeExclusions,
+    boundedQuantityAfterExclusions,
     technicalSpecificationExclusions,
     negativeListContextExclusions,
     negativeListItemExclusions,
@@ -234,6 +279,10 @@ export const rule = {
     const quoteLineRegexes = buildRegexList(options.quoteContextExclusions);
     const headingLineRegexes = buildRegexList(options.headingContextExclusions);
     const numericMeasureRegexes = buildRegexList(options.numericMeasureExclusions);
+    const closedArithmeticPercentageBeforeRegexes = buildRegexList(
+      options.closedArithmeticPercentageBeforeExclusions,
+    );
+    const percentageComparisonAfterRegexes = buildRegexList(options.percentageComparisonAfterExclusions);
     const hedgedAdverbRegexes = buildRegexList(options.hedgedAdverbExclusions);
     const negatedAbsoluteRegexes = buildRegexList(options.negatedAbsoluteExclusions);
     const selfReferentialRegexes = buildRegexList(options.selfReferentialQuoteExclusions);
@@ -243,6 +292,8 @@ export const rule = {
     const scopedAudienceRegexes = buildRegexList(options.scopedAudienceExclusions);
     const operationalRequirementRegexes = buildRegexList(options.operationalRequirementExclusions);
     const boundedProjectStatusRegexes = buildRegexList(options.boundedProjectStatusExclusions);
+    const boundedQuantityBeforeRegexes = buildRegexList(options.boundedQuantityBeforeExclusions);
+    const boundedQuantityAfterRegexes = buildRegexList(options.boundedQuantityAfterExclusions);
     const technicalSpecificationRegexes = buildRegexList(options.technicalSpecificationExclusions);
     const negativeListContextRegexes = buildRegexList(options.negativeListContextExclusions);
     const negativeListItemRegexes = buildRegexList(options.negativeListItemExclusions);
@@ -282,7 +333,22 @@ export const rule = {
       if (matchesAround(context, scopedAudienceRegexes)) return false;
       if (matchesAround(context, operationalRequirementRegexes)) return false;
       if (matchesAround(context, boundedProjectStatusRegexes)) return false;
+      if ((matchText === 'すべて' || matchText === '全て') && matchesAtCurrentPosition(
+        context,
+        relativeIndex,
+        matchText,
+        boundedQuantityBeforeRegexes,
+        boundedQuantityAfterRegexes,
+      )) return false;
       if (matchesAround(context, technicalSpecificationRegexes)) return false;
+
+      if ((matchText === '100%' || matchText === '１００％') && matchesAtCurrentPosition(
+        context,
+        relativeIndex,
+        matchText,
+        closedArithmeticPercentageBeforeRegexes,
+        percentageComparisonAfterRegexes,
+      )) return false;
 
       // 量的単位: 「100%負担」「100%気にしなくていい」など
       const afterMatchFull = doc.maskedText.slice(match.index, match.index + matchText.length + 24);
