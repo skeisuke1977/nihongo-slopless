@@ -682,6 +682,29 @@ export function runMarkdownAdjacencyTests() {
     });
     equal(view.text, '', 'Hugo visible prefix does not bridge opaque shortcode remainder');
     equal(view.stopReason, 'opaque-barrier', 'Hugo shortcode remainder remains opaque');
+
+    const nonTechnical = '当社はこの要求に対応する{{< note >}}コンポーネントを公開します。';
+    const nonTechnicalFindings = findingsFor('deadline-missing', nonTechnical);
+    equal(nonTechnicalFindings.length, 1, 'Hugo shortcode alone does not imply technical correspondence');
+    equal(nonTechnicalFindings[0]?.index, nonTechnical.indexOf('対応する'), 'non-technical shortcode finding index');
+    equal(nonTechnicalFindings[0]?.length, '対応する'.length, 'non-technical shortcode finding length');
+
+    const technicalBefore = '当社はこのAPIに対応する{{< note >}}コンポーネントを公開します。';
+    equal(
+      findingsFor('deadline-missing', technicalBefore).length,
+      0,
+      'technical before context excludes an adjacent Hugo shortcode without raw-source fallback',
+    );
+
+    const opaqueAfter = 'この要求に対応する{{< note >}}アプリケーション';
+    const opaqueAfterDoc = prepareMarkdown(opaqueAfter);
+    const opaqueAfterView = opaqueAfterDoc.adjacency.after(
+      opaqueAfter.indexOf('対応する') + '対応する'.length,
+      { maxViewChars: 24, maxSourceOffset: opaqueAfter.length },
+    );
+    equal(opaqueAfterView.text, '', 'Hugo shortcode does not expose a technical term after the opaque barrier');
+    equal(opaqueAfterView.stopReason, 'opaque-barrier', 'Hugo shortcode stops technical after traversal');
+    equal(opaqueAfterView.complete, false, 'Hugo shortcode technical after view remains incomplete');
   }
 
   for (const text of [

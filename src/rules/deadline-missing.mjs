@@ -331,10 +331,7 @@ export const rule = {
           match[0].startsWith('対応') &&
           (
             (technicalCorrespondenceBeforeRegex && technicalCorrespondenceBeforeRegex.test(beforeChunk)) ||
-            (technicalCorrespondenceAfterRegex && technicalCorrespondenceAfterRegex.test(afterChunk)) ||
-            // Hugo shortcode is an opaque barrier for adjacency. Preserve the
-            // existing immediate `{{<` compatibility without crossing it.
-            doc.text.startsWith('{{<', sourceMatchEnd)
+            (technicalCorrespondenceAfterRegex && technicalCorrespondenceAfterRegex.test(afterChunk))
           )
         ) {
           continue;
