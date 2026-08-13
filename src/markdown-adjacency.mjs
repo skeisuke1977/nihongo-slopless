@@ -64,6 +64,12 @@ function collectInlinePresentationRanges(text, kinds) {
     setRange(kinds, labelEnd + 1, end, RANGE_HIDDEN);
   }
 
+  const presentationText = text.split('');
+  for (let index = 0; index < kinds.length; index += 1) {
+    if (kinds[index] === RANGE_HIDDEN) presentationText[index] = '\uFFFC';
+  }
+  const textForPresentation = presentationText.join('');
+
   const delimiterPatterns = [
     /\*\*(?=\S)([^\n]{0,4095}?\S)\*\*/gu,
     /(?<![A-Za-z0-9_])__(?=\S)([^\n]{0,4095}?\S)__(?![A-Za-z0-9_])/gu,
@@ -73,7 +79,7 @@ function collectInlinePresentationRanges(text, kinds) {
   ];
 
   for (const regex of delimiterPatterns) {
-    for (const match of text.matchAll(regex)) {
+    for (const match of textForPresentation.matchAll(regex)) {
       const delimiterLength = match[0].startsWith('**') || match[0].startsWith('__') || match[0].startsWith('~~') ? 2 : 1;
       const start = match.index;
       const end = start + match[0].length;
@@ -113,17 +119,12 @@ function createView(originalText, kinds, position, options, direction) {
   const advance = () => { cursor += direction === 'before' ? -1 : 1; };
 
   while (true) {
-    if (stopReason) break;
     // Boundary wins when it coincides with the compact-view limit.
     if (atBoundary()) {
       stopReason = 'source-boundary';
       break;
     }
-    if (chars.length >= maxViewChars) {
-      stopReason = 'max-view-chars';
-      break;
-    }
-
+    if (stopReason) break;
     const index = nextIndex();
     if (index < 0 || index >= originalText.length) {
       stopReason = 'source-boundary';
@@ -135,6 +136,10 @@ function createView(originalText, kinds, position, options, direction) {
     }
 
     if (kinds[index] === RANGE_LITERAL) {
+      if (chars.length >= maxViewChars) {
+        stopReason = 'max-view-chars';
+        break;
+      }
       if (direction === 'before') {
         chars.unshift(originalText[index]);
         offsets.unshift(index);
@@ -160,8 +165,8 @@ function createView(originalText, kinds, position, options, direction) {
       return sourceOffsets[viewOffset];
     },
     originalRange(viewStart, viewEnd) {
-      const start = Math.max(0, Math.trunc(viewStart ?? 0));
-      const end = Math.min(sourceOffsets.length, Math.max(start, Math.trunc(viewEnd ?? sourceOffsets.length)));
+      const start = clampOffset(Number.isFinite(viewStart) ? viewStart : 0, sourceOffsets.length);
+      const end = clampOffset(Number.isFinite(viewEnd) ? Math.max(start, viewEnd) : sourceOffsets.length, sourceOffsets.length);
       if (start === end) {
         const offset = start < sourceOffsets.length ? sourceOffsets[start] : sourceEnd;
         return { start: offset, end: offset };

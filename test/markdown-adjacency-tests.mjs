@@ -78,6 +78,48 @@ export function runMarkdownAdjacencyTests() {
     const bounded = adjacency.after(0, { maxViewChars: 8, maxSourceOffset: 2 });
     equal(bounded.text, '甲乙', 'source boundary limits collected text');
     ok(bounded.sourceOffsets.every(offset => offset < 2), 'source boundary limits offsets');
+
+    deepEqual(before.originalRange(-10, 999), { start: 0, end: 3 }, 'originalRange clamps to full view');
+    deepEqual(before.originalRange(999, 999), { start: before.sourceEnd, end: before.sourceEnd }, 'originalRange clamps beyond view to sourceEnd');
+    deepEqual(before.originalRange(NaN, NaN), { start: 0, end: 3 }, 'originalRange normalizes non-finite values');
+    deepEqual(before.originalRange(1, 0), { start: 1, end: 1 }, 'originalRange normalizes reversed range to empty');
+  }
+
+  // Presentation-only tails do not make an otherwise complete view incomplete.
+  for (const text of ['**甲**', '[甲](https://example.invalid)', '~~甲~~']) {
+    const view = createMarkdownAdjacency(text).after(0, {
+      maxViewChars: 1,
+      maxSourceOffset: text.length,
+    });
+    equal(view.text, '甲', `presentation-only after text: ${text}`);
+    equal(view.stopReason, 'source-boundary', `presentation-only after stop: ${text}`);
+    equal(view.complete, true, `presentation-only after complete: ${text}`);
+    equal(view.reachedSourceBoundary, true, `presentation-only after reached boundary: ${text}`);
+    equal(view.sourceEnd, text.length, `presentation-only after sourceEnd: ${text}`);
+  }
+
+  {
+    const text = '**甲**';
+    const view = createMarkdownAdjacency(text).before(text.length, {
+      maxViewChars: 1,
+      minSourceOffset: 0,
+    });
+    equal(view.text, '甲', 'presentation-only before text');
+    equal(view.stopReason, 'source-boundary', 'presentation-only before stop');
+    equal(view.complete, true, 'presentation-only before complete');
+    equal(view.reachedSourceBoundary, true, 'presentation-only before reached boundary');
+    equal(view.sourceStart, 0, 'presentation-only before sourceStart');
+  }
+
+  for (const [text, direction] of [['**甲**乙', 'after'], ['乙**甲**', 'before']]) {
+    const adjacency = createMarkdownAdjacency(text);
+    const view = direction === 'after'
+      ? adjacency.after(0, { maxViewChars: 1, maxSourceOffset: text.length })
+      : adjacency.before(text.length, { maxViewChars: 1, minSourceOffset: 0 });
+    equal(view.text, '甲', `literal remainder text: ${text}`);
+    equal(view.stopReason, 'max-view-chars', `literal remainder stop: ${text}`);
+    equal(view.complete, false, `literal remainder incomplete: ${text}`);
+    equal(view.reachedSourceBoundary, false, `literal remainder boundary: ${text}`);
   }
 
   // Transparent presentation delimiters and hidden link destinations.
@@ -126,6 +168,14 @@ export function runMarkdownAdjacencyTests() {
     equal(insideUrl.text, '', 'hidden destination is not an unconditional bridge');
     equal(insideUrl.stopReason, 'opaque-barrier', 'starting inside destination stops traversal');
 
+    const hiddenAtBoundary = createMarkdownAdjacency(text).after(urlStart, {
+      maxViewChars: 8,
+      maxSourceOffset: urlStart,
+    });
+    equal(hiddenAtBoundary.stopReason, 'source-boundary', 'source boundary wins inside hidden destination');
+    equal(hiddenAtBoundary.complete, true, 'hidden source boundary is complete');
+    equal(hiddenAtBoundary.reachedSourceBoundary, true, 'hidden source boundary is reached');
+
     const underscoreStrong = '__語__';
     const underscoreAfter = createMarkdownAdjacency(underscoreStrong).after(underscoreStrong.indexOf('語') + 1, {
       maxViewChars: 4,
@@ -133,6 +183,33 @@ export function runMarkdownAdjacencyTests() {
     });
     equal(underscoreAfter.text, '', 'double underscore delimiter is transparent');
     equal(underscoreAfter.stopReason, 'source-boundary', 'double underscore reaches boundary');
+  }
+
+  for (const text of [
+    '前**[語](https://example.invalid/a**b)**後',
+    '前*[語](https://example.invalid/a*b)*後',
+    '前_[語](https://example.invalid/a_b)_後',
+    '前~~[語](https://example.invalid/a~~b)~~後',
+  ]) {
+    const matchEnd = text.indexOf('語') + 1;
+    const view = createMarkdownAdjacency(text).after(matchEnd, {
+      maxViewChars: 8,
+      maxSourceOffset: text.length,
+    });
+    equal(view.text, '後', `hidden destination delimiter is ignored: ${text}`);
+    equal(view.complete, true, `hidden destination delimiter reaches boundary: ${text}`);
+    ok(!view.text.startsWith('*') && !view.text.startsWith('_') && !view.text.startsWith('~'), `hidden destination leaves no delimiter: ${text}`);
+  }
+
+  {
+    const text = '[甲](https://example.invalid)';
+    const view = createMarkdownAdjacency(text).after(0, {
+      maxViewChars: 1,
+      maxSourceOffset: text.length,
+    });
+    deepEqual(view.originalRange(-10, 999), { start: 1, end: 2 }, 'originalRange stays finite through hidden source');
+    ok(Number.isFinite(view.originalRange(NaN, NaN).start) && Number.isFinite(view.originalRange(NaN, NaN).end), 'hidden originalRange is finite');
+    ok(view.originalRange(-10, 999).start <= view.originalRange(-10, 999).end, 'hidden originalRange is monotonic');
   }
 
   // Opaque barriers stop traversal and are never bridged.
@@ -243,6 +320,11 @@ export function runMarkdownAdjacencyTests() {
     }
   }
 
+  {
+    const text = '六つ**[すべて](https://example.invalid/a**b)**が公表値と一致する。';
+    equal(findingsFor('absolute-claim', text).length, 0, 'absolute-claim ignores delimiters inside hidden destination');
+  }
+
   const generalThenBounded = 'すべての授業で、六つ**すべて**が公表値と一致する。';
   const generalThenBoundedFindings = findingsFor('absolute-claim', generalThenBounded);
   equal(generalThenBoundedFindings.length, 1, 'only generalizing すべて should remain');
@@ -271,6 +353,10 @@ export function runMarkdownAdjacencyTests() {
   for (const [format, decorate] of decoratedOnly) {
     const text = replaceOnce(placeholderPlain, 'ダミー', decorate('ダミー'));
     equal(findingsFor('placeholder', text).length, 0, `placeholder statistical dummy ${format}`);
+  }
+  {
+    const text = 'カテゴリ変数から**[ダミー](https://example.invalid/a**b)**変数を作成した。';
+    equal(findingsFor('placeholder', text).length, 0, 'placeholder ignores delimiters inside hidden destination');
   }
 
   for (const text of [
@@ -397,6 +483,20 @@ export function runMarkdownAdjacencyTests() {
       equal(finding.line, 1, `${item.name} ${item.format} line`);
       equal(finding.column, finding.index + 1, `${item.name} ${item.format} column`);
     }
+  }
+
+  for (const text of [
+    '申請フローを**[改善する](https://example.invalid/a**b)**ことができる仕組みです。',
+  ]) {
+    equal(findingsFor('deadline-missing', text).length, 0, 'deadline exclusion ignores delimiters inside hidden destination');
+  }
+
+  {
+    const text = '新事業では、申請フローを**[改善する](https://example.invalid/a**b)**ところまで含む予定です。';
+    const findings = findingsFor('deadline-missing', text);
+    equal(findings.length, 1, 'deadline positive survives delimiters inside hidden destination');
+    equal(findings[0]?.index, text.indexOf('改善する'), 'hidden destination positive index');
+    equal(findings[0]?.length, '改善する'.length, 'hidden destination positive length');
   }
 
   for (const text of [
