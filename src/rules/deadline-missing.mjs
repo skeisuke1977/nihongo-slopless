@@ -19,6 +19,15 @@
 
 import { stringList } from '../utils.mjs';
 
+function hasTerminalAnchor(pattern) {
+  const source = pattern.trimEnd();
+  if (!source.endsWith('$')) return false;
+
+  let slashes = 0;
+  for (let index = source.length - 2; index >= 0 && source[index] === '\\'; index -= 1) slashes += 1;
+  return slashes % 2 === 0;
+}
+
 // 検出対象となる対応・行動述語のパターン。
 // 各パターンは「(述語語幹)(語形変化を含む末尾)」の形にする。
 const actionPredicates = [
@@ -197,7 +206,9 @@ export const rule = {
     const deadlineSource = buildSourceUnion(options.deadlinePatterns);
     const negationSource = buildSourceUnion(options.negationPatterns);
     const sentenceExclusionSource = buildSourceUnion(options.sentenceExclusionPatterns);
-    const actionSuffixExclusionSource = buildSourceUnion(options.actionSuffixExclusionPatterns);
+    const actionSuffixPatterns = stringList(options.actionSuffixExclusionPatterns);
+    const localActionSuffixSource = buildSourceUnion(actionSuffixPatterns.filter(pattern => !hasTerminalAnchor(pattern)));
+    const terminalActionSuffixSource = buildSourceUnion(actionSuffixPatterns.filter(hasTerminalAnchor));
     const abstractProgressObjectSource = buildSourceUnion(options.abstractProgressObjects);
     const learningProgressContextSource = buildSourceUnion(options.learningProgressContextPatterns);
     const learningProgressBeforeRegex = buildAnchoredRegex(
@@ -226,8 +237,11 @@ export const rule = {
     const sentenceExclusionRegex = sentenceExclusionSource
       ? new RegExp(sentenceExclusionSource, 'u')
       : null;
-    const actionSuffixExclusionRegex = actionSuffixExclusionSource
-      ? new RegExp(`^(?:${actionSuffixExclusionSource})`, 'u')
+    const localActionSuffixExclusionRegex = localActionSuffixSource
+      ? new RegExp(`^(?:${localActionSuffixSource})`, 'u')
+      : null;
+    const terminalActionSuffixExclusionRegex = terminalActionSuffixSource
+      ? new RegExp(`^(?:${terminalActionSuffixSource})`, 'u')
       : null;
     const abstractProgressObjectRegex = abstractProgressObjectSource
       ? new RegExp(`(?:${abstractProgressObjectSource})\\s*を\\s*$`, 'u')
@@ -263,11 +277,18 @@ export const rule = {
       const actionRegex = new RegExp(actionSource, 'gu');
       for (const match of sentence.text.matchAll(actionRegex)) {
         const matchEnd = match.index + match[0].length;
-        const beforeChunk = sentence.text.slice(Math.max(0, match.index - 32), match.index);
-        const afterChunk = sentence.text.slice(
-          matchEnd,
-          Math.min(sentence.text.length, matchEnd + 24),
-        );
+        const sourceMatchStart = sentence.start + match.index;
+        const sourceMatchEnd = sentence.start + matchEnd;
+        const beforeView = doc.adjacency.before(sourceMatchStart, {
+          maxViewChars: 32,
+          minSourceOffset: sentence.start,
+        });
+        const afterView = doc.adjacency.after(sourceMatchEnd, {
+          maxViewChars: 24,
+          maxSourceOffset: sentence.end,
+        });
+        const beforeChunk = beforeView.text;
+        const afterChunk = afterView.text;
 
         // 日本語インライン引用「...」や『...』の内側は、他者発話のラベルや
         // 例示語の列挙として扱う。文書本体の対応要求ではないため除外する。
@@ -295,7 +316,14 @@ export const rule = {
         }
 
         // 能力説明、抽象的な重要性評価、単なる方針表明は期限つき対応要求ではない。
-        if (actionSuffixExclusionRegex && actionSuffixExclusionRegex.test(afterChunk)) {
+        if (localActionSuffixExclusionRegex && localActionSuffixExclusionRegex.test(afterChunk)) {
+          continue;
+        }
+        if (
+          afterView.complete &&
+          terminalActionSuffixExclusionRegex &&
+          terminalActionSuffixExclusionRegex.test(afterChunk)
+        ) {
           continue;
         }
 
@@ -305,7 +333,10 @@ export const rule = {
           match[0].startsWith('対応') &&
           (
             (technicalCorrespondenceBeforeRegex && technicalCorrespondenceBeforeRegex.test(beforeChunk)) ||
-            (technicalCorrespondenceAfterRegex && technicalCorrespondenceAfterRegex.test(afterChunk))
+            (technicalCorrespondenceAfterRegex && technicalCorrespondenceAfterRegex.test(afterChunk)) ||
+            // Hugo shortcode is an opaque barrier for adjacency. Preserve the
+            // existing immediate `{{<` compatibility without crossing it.
+            doc.text.startsWith('{{<', sourceMatchEnd)
           )
         ) {
           continue;
@@ -335,7 +366,7 @@ export const rule = {
         }
 
         findings.push({
-          index: sentence.start + match.index,
+          index: sourceMatchStart,
           length: match[0].length,
           message: '期限が見えにくい対応表現です。いつまでに、何を完了するのかを補えるか確認してください。',
         });
