@@ -235,6 +235,41 @@ assert.equal(
   boundedThenGeneralText.lastIndexOf('すべて'),
   'the later generalizing すべて should be detected',
 );
+expectNoRule('absolute-claim', '四つを合計すると100%を超える。');
+expectNoRule('absolute-claim', '四つを合算すると100%を超える。');
+expectNoRule('absolute-claim', '四つの合計は100%を超える。');
+expectNoRule('absolute-claim', '各項目の合計は100%を超える。');
+const bareTotalGuaranteeText = 'この方法なら合計100%以上の成果を出せる。';
+const bareTotalGuaranteeFindings = findingsFor('absolute-claim', bareTotalGuaranteeText);
+assert.equal(bareTotalGuaranteeFindings.length, 1, 'a bare 合計 should not suppress a guarantee percentage');
+assert.equal(
+  bareTotalGuaranteeFindings[0].index,
+  bareTotalGuaranteeText.indexOf('100%'),
+  'the guarantee percentage after a bare 合計 should be detected',
+);
+const bareAggregateGuaranteeText = 'この方法なら合算100%以上の成果を出せる。';
+const bareAggregateGuaranteeFindings = findingsFor('absolute-claim', bareAggregateGuaranteeText);
+assert.equal(bareAggregateGuaranteeFindings.length, 1, 'a bare 合算 should not suppress a guarantee percentage');
+assert.equal(
+  bareAggregateGuaranteeFindings[0].index,
+  bareAggregateGuaranteeText.indexOf('100%'),
+  'the guarantee percentage after a bare 合算 should be detected',
+);
+expectNoRule('absolute-claim', '6人すべてが記録と一致した。');
+expectNoRule('absolute-claim', '六校すべてが公表値と一致する。');
+expectNoRule('absolute-claim', '3社すべてが元データと一致した。');
+const countedOutcomeClaimText = '6人すべてが必ず成果を出す。';
+const countedOutcomeClaimFindings = findingsFor('absolute-claim', countedOutcomeClaimText);
+assert.deepEqual(
+  countedOutcomeClaimFindings.map(finding => countedOutcomeClaimText.slice(finding.index, finding.index + finding.length)),
+  ['すべて', '必ず'],
+  'a counted outcome claim should keep both すべて and 必ず',
+);
+expectNoRule('absolute-claim', '六つすべてが公表値と一致します。');
+expectNoRule('absolute-claim', '六つすべてが公表値と一致しました。');
+expectNoRule('absolute-claim', '六つすべてが公表値と一致しています。');
+expectNoRule('absolute-claim', '6件すべてが計算結果を再現できました。');
+expectNoRule('absolute-claim', '3件すべてが条件に該当しました。');
 assert.equal(
   findingsFor('absolute-claim', 'この方法はすべての授業で必ず効果を出す。', {
     rules: { 'nihongo-slopless/absolute-claim': ['warning', { terms: [] }] },

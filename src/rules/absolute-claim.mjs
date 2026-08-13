@@ -36,10 +36,15 @@ const numericMeasureExclusions = [
   '^(?:100%|１００％)\\s*(?:手数料|出典|気)',
 ];
 
+const boundedNumberPattern = '(?:[0-9０-９]+|[一二三四五六七八九十百]+)';
+const boundedCounterPattern = '(?:つ|個|件|人|名|校|社|台|本|枚|冊|組|群|種類|項目|値|選択肢|回答|ケース)';
+const boundedOperandPattern = `${boundedNumberPattern}${boundedCounterPattern}`;
+const namedAggregationOperandPattern = `(?:${boundedOperandPattern}|各(?:項目|値|選択肢|回答|ケース))`;
+
 // 100%との大小比較は、現在の100%へ直接つながる加算・集計の手掛かりと、
 // 直後の比較表現がそろう場合だけ閉じた算術結果として除外する。
 const closedArithmeticPercentageBeforeExclusions = [
-  '(?:(?:[0-9０-９]+|[一二三四五六七八九十百]+)(?:つ|件|項目|値|選択肢|回答|ケース)?(?:を)?足す(?:と|場合)?|(?:[一-龯ぁ-んァ-ンー0-9０-９]{1,12}の)?(?:合計|合算))(?:が|は|も|で)?\\s*$',
+  `(?:${boundedOperandPattern}\\s*を\\s*(?:足す(?:と|場合)?|(?:合計|合算)する(?:と|場合)?)|${namedAggregationOperandPattern}\\s*の\\s*(?:合計|合算))(?:が|は|も|で)?\\s*$`,
 ];
 
 const percentageComparisonAfterExclusions = [
@@ -106,11 +111,12 @@ const boundedProjectStatusExclusions = [
 // 一般化とは分ける。文境界内の短い距離に限定し、単に同じ文に数字や
 // 「すべて」があるだけでは抑制しない。
 const boundedQuantityBeforeExclusions = [
-  '(?:[0-9０-９]+|[一二三四五六七八九十百]+)(?:つ|件|項目|値|選択肢|回答|ケース)?(?:の(?:値|項目))?\\s*$',
+  `${boundedOperandPattern}(?:の(?:値|項目))?\\s*$`,
 ];
 
+const boundedResultVerbPattern = '(?:する|した|している|します|しました|しています|できる|できた|できている|できます|できました|できています)';
 const boundedQuantityAfterExclusions = [
-  '^\\s*(?:が|は|を)?[^。！？\\n]{0,24}(?:(?:公表値|元データ|原資料|記録|計算結果|期待値|実測値)と)?(?:一致|再現|該当)(?:する|した|している|できる|できた)',
+  `^\\s*(?:が|は|を)?[^。！？\\n]{0,24}(?:(?:公表値|元データ|原資料|記録|計算結果|期待値|実測値)と)?(?:一致|再現|該当)${boundedResultVerbPattern}`,
 ];
 
 // 新規: 技術仕様・定義文脈の対象全称は除外。副作用: 技術語を含む短い保証文の一部を拾わない。
