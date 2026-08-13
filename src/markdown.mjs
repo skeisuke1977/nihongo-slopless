@@ -156,6 +156,7 @@ function splitStructureBlocks(maskedText) {
 function maskMarkdown(text, { ignoredRanges = [] } = {}) {
   const chars = text.split('');
   const opaqueRanges = [];
+  const semanticRanges = [];
 
   const maskOpaqueRange = (start, end) => {
     opaqueRanges.push({ start, end });
@@ -180,12 +181,17 @@ function maskMarkdown(text, { ignoredRanges = [] } = {}) {
   // body text visible while removing attributes such as figure captions or
   // glossary IDs from sentence-length and paragraph heuristics.
   for (const match of text.matchAll(/\{\{[<%][^\n]*?[>%]\}\}/gu)) {
-    opaqueRanges.push({ start: match.index, end: match.index + match[0].length });
+    const visibleText = visibleHugoShortcodeText(match[0]);
+    const visibleEnd = match.index + visibleText.length;
+    if (visibleText) semanticRanges.push({ start: match.index, end: visibleEnd });
+    if (visibleEnd < match.index + match[0].length) {
+      opaqueRanges.push({ start: visibleEnd, end: match.index + match[0].length });
+    }
     maskRangeKeepingPrefix(
       chars,
       match.index,
       match.index + match[0].length,
-      visibleHugoShortcodeText(match[0]),
+      visibleText,
     );
   }
 
@@ -217,7 +223,7 @@ function maskMarkdown(text, { ignoredRanges = [] } = {}) {
     maskOpaqueRange(range.start, range.end);
   }
 
-  return { maskedText: chars.join(''), opaqueRanges };
+  return { maskedText: chars.join(''), opaqueRanges, semanticRanges };
 }
 
 function maskAdditionalRanges(text, ranges) {
@@ -304,7 +310,7 @@ function splitParagraphs(maskedText, sentences, blocks) {
 
 export function prepareMarkdown(text, { filePath = '<text>', ignorePatterns = [] } = {}) {
   const ignoredRanges = ignorePatternRanges(text, ignorePatterns);
-  const { maskedText, opaqueRanges } = maskMarkdown(text, { ignoredRanges });
+  const { maskedText, opaqueRanges, semanticRanges } = maskMarkdown(text, { ignoredRanges });
   const lineStarts = buildLineStarts(text);
   const structureBlocks = splitStructureBlocks(maskedText);
   const sentences = annotateSentenceSections(text, splitSentences(maskedText, structureBlocks));
@@ -313,6 +319,8 @@ export function prepareMarkdown(text, { filePath = '<text>', ignorePatterns = []
   const redactedText = maskAdditionalRanges(maskedText, disableRanges);
   const adjacency = createMarkdownAdjacency(text, {
     opaqueRanges: [...opaqueRanges, ...disableRanges],
+    semanticText: maskedText,
+    semanticRanges,
   });
   return {
     filePath,

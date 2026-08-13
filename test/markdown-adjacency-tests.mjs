@@ -8,7 +8,6 @@ const DECORATIONS = [
   ['plain', value => value],
   ['strong', value => `**${value}**`],
   ['emphasis', value => `*${value}*`],
-  ['underscore emphasis', value => `_${value}_`],
   ['strikethrough', value => `~~${value}~~`],
   ['inline link', value => `[${value}](${URL})`],
   ['nested strong + link', value => `**[${value}](${URL})**`],
@@ -186,9 +185,73 @@ export function runMarkdownAdjacencyTests() {
   }
 
   for (const text of [
+    '日本語_識別子',
+    '変数_名',
+    'α_β',
+    '１２_３',
+    '𠮷_名',
+    'e\u0301_語_名',
+    'snake_case',
+  ]) {
+    const view = createMarkdownAdjacency(text).after(0, {
+      maxViewChars: text.length,
+      maxSourceOffset: text.length,
+    });
+    equal(view.text, text, `Unicode intraword underscore stays literal: ${text}`);
+    deepEqual(view.sourceOffsets, [...text].flatMap((char, index, list) => {
+      const start = list.slice(0, index).join('').length;
+      return Array.from({ length: char.length }, (_, offset) => start + offset);
+    }), `Unicode intraword underscore offsets: ${text}`);
+  }
+
+  for (const text of ['_ダミー_', '__ダミー__']) {
+    const matchStart = text.indexOf('ダミー');
+    const before = createMarkdownAdjacency(text).before(matchStart, {
+      maxViewChars: 8,
+      minSourceOffset: 0,
+    });
+    const after = createMarkdownAdjacency(text).after(matchStart + 'ダミー'.length, {
+      maxViewChars: 8,
+      maxSourceOffset: text.length,
+    });
+    equal(before.text, '', `standalone underscore opening delimiter is transparent: ${text}`);
+    equal(after.text, '', `standalone underscore closing delimiter is transparent: ${text}`);
+    equal(before.sourceEnd, matchStart, `standalone underscore source end: ${text}`);
+    equal(after.sourceStart, matchStart + 'ダミー'.length, `standalone underscore source start: ${text}`);
+    const findings = findingsFor('placeholder', text);
+    equal(findings.length, 1, `standalone underscore placeholder remains visible: ${text}`);
+    equal(findings[0]?.index, matchStart, `standalone underscore finding source index: ${text}`);
+    equal(findings[0]?.length, 'ダミー'.length, `standalone underscore finding source length: ${text}`);
+  }
+
+  {
+    const invalid = '前[ダミー](not a url)後';
+    const invalidView = createMarkdownAdjacency(invalid).after(0, {
+      maxViewChars: invalid.length,
+      maxSourceOffset: invalid.length,
+    });
+    equal(invalidView.text, invalid, 'invalid bare link destination stays literal');
+    deepEqual(invalidView.sourceOffsets, Array.from({ length: invalid.length }, (_, index) => index), 'invalid bare link source offsets stay unchanged');
+
+    for (const valid of [
+      '前[ダミー]()後',
+      '前[ダミー](relative-path)後',
+      '前[ダミー](https://example.invalid)後',
+      '前[ダミー](<not a url>)後',
+    ]) {
+      const view = createMarkdownAdjacency(valid).after(0, {
+        maxViewChars: valid.length,
+        maxSourceOffset: valid.length,
+      });
+      equal(view.text, '前ダミー後', `valid inline link destination is hidden: ${valid}`);
+      ok(!view.text.includes('url') && !view.text.includes('relative'), `valid destination is absent from view: ${valid}`);
+      equal(view.sourceOffsets.length, '前ダミー後'.length, `valid destination source offset count: ${valid}`);
+    }
+  }
+
+  for (const text of [
     '前**[語](https://example.invalid/a**b)**後',
     '前*[語](https://example.invalid/a*b)*後',
-    '前_[語](https://example.invalid/a_b)_後',
     '前~~[語](https://example.invalid/a~~b)~~後',
   ]) {
     const matchEnd = text.indexOf('語') + 1;
@@ -199,6 +262,16 @@ export function runMarkdownAdjacencyTests() {
     equal(view.text, '後', `hidden destination delimiter is ignored: ${text}`);
     equal(view.complete, true, `hidden destination delimiter reaches boundary: ${text}`);
     ok(!view.text.startsWith('*') && !view.text.startsWith('_') && !view.text.startsWith('~'), `hidden destination leaves no delimiter: ${text}`);
+  }
+  {
+    const text = '前_[語](https://example.invalid/a_b)_後';
+    const matchEnd = text.indexOf('語') + 1;
+    const view = createMarkdownAdjacency(text).after(matchEnd, {
+      maxViewChars: 8,
+      maxSourceOffset: text.length,
+    });
+    equal(view.text, '_後', 'intraword underscore stays literal around a linked label');
+    equal(view.complete, true, 'intraword underscore link reaches boundary');
   }
 
   {
@@ -381,6 +454,22 @@ export function runMarkdownAdjacencyTests() {
     equal(findings[0]?.index, text.indexOf('ダミー'), 'mixed decorated UI dummy index');
     equal(findings[0]?.length, 'ダミー'.length, 'mixed decorated UI dummy length');
   }
+  for (const text of [
+    'カテゴリ変数から_ダミー_変数を作成した。',
+    'カテゴリ変数から__ダミー__変数を作成した。',
+  ]) {
+    const findings = findingsFor('placeholder', text);
+    equal(findings.length, 1, `intraword underscore does not create statistical adjacency: ${text}`);
+    equal(findings[0]?.index, text.indexOf('ダミー'), `intraword placeholder index: ${text}`);
+    equal(findings[0]?.length, 'ダミー'.length, `intraword placeholder length: ${text}`);
+  }
+  {
+    const text = '六つ_すべて_が公表値と一致する。';
+    const findings = findingsFor('absolute-claim', text);
+    equal(findings.length, 1, 'intraword underscores do not create a bounded-result adjacency');
+    equal(findings[0]?.index, text.indexOf('すべて'), 'intraword absolute-claim index');
+    equal(findings[0]?.length, 'すべて'.length, 'intraword absolute-claim length');
+  }
   {
     const text = 'カテゴリ変数から`注記`ダミー変数を作成した。';
     const findings = findingsFor('placeholder', text);
@@ -398,8 +487,17 @@ export function runMarkdownAdjacencyTests() {
   const groups = [];
   const addDecoratedGroup = (name, plain, target, expected) => {
     for (const [format, decorate] of DECORATIONS) {
-      groups.push({ name, format, text: replaceOnce(plain, target, decorate(target)), expected });
+      groups.push({ name, format, text: replaceOnce(plain, target, decorate(target)), target, expected });
     }
+  };
+  const addIntrawordUnderscoreGroup = (name, plain, target, expected) => {
+    groups.push({
+      name,
+      format: 'intraword underscore literal',
+      text: replaceOnce(plain, target, `_${target}_`),
+      target,
+      expected,
+    });
   };
 
   addDecoratedGroup(
@@ -408,13 +506,25 @@ export function runMarkdownAdjacencyTests() {
     '対応する',
     0,
   );
+  addIntrawordUnderscoreGroup(
+    'technical correspondence',
+    'この規格に対応するアプリケーションの動作を確認した。',
+    '対応する',
+    1,
+  );
   addDecoratedGroup(
     'capability',
     '申請フローを改善することができる仕組みです。',
     '改善する',
     0,
   );
-  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[5], DECORATIONS[6]]) {
+  addIntrawordUnderscoreGroup(
+    'capability',
+    '申請フローを改善することができる仕組みです。',
+    '改善する',
+    1,
+  );
+  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[4], DECORATIONS[5]]) {
     groups.push({
       name: 'capability whole exclusion',
       format,
@@ -432,7 +542,13 @@ export function runMarkdownAdjacencyTests() {
     '改善する',
     0,
   );
-  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[5], DECORATIONS[6]]) {
+  addIntrawordUnderscoreGroup(
+    'scope explanation',
+    '設計し、作り、動かし、評価して改善するところまでが入る。',
+    '改善する',
+    1,
+  );
+  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[4], DECORATIONS[5]]) {
     groups.push({
       name: 'scope whole exclusion',
       format,
@@ -450,7 +566,13 @@ export function runMarkdownAdjacencyTests() {
     '改善する',
     0,
   );
-  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[5], DECORATIONS[6]]) {
+  addIntrawordUnderscoreGroup(
+    'operation definition',
+    'ログを取り、問題が起きたら止めて、原因を調べて改善する運用を指している。',
+    '改善する',
+    1,
+  );
+  for (const [format, decorate] of [DECORATIONS[1], DECORATIONS[4], DECORATIONS[5]]) {
     groups.push({
       name: 'operation whole exclusion',
       format,
@@ -470,6 +592,7 @@ export function runMarkdownAdjacencyTests() {
   ];
   for (const plain of positiveBoundaries) {
     addDecoratedGroup('positive boundary', plain, '改善する', 1);
+    addIntrawordUnderscoreGroup('positive boundary', plain, '改善する', 1);
   }
 
   equal(groups.length, 58, 'deadline-missing audit matrix size');
@@ -478,8 +601,8 @@ export function runMarkdownAdjacencyTests() {
     equal(findings.length, item.expected, `${item.name} ${item.format}: ${item.text}`);
     if (item.expected === 1) {
       const finding = findings[0];
-      equal(finding.index, item.text.indexOf('改善する'), `${item.name} ${item.format} index`);
-      equal(finding.length, '改善する'.length, `${item.name} ${item.format} length`);
+      equal(finding.index, item.text.indexOf(item.target), `${item.name} ${item.format} index`);
+      equal(finding.length, item.target.length, `${item.name} ${item.format} length`);
       equal(finding.line, 1, `${item.name} ${item.format} line`);
       equal(finding.column, finding.index + 1, `${item.name} ${item.format} column`);
     }
@@ -497,6 +620,68 @@ export function runMarkdownAdjacencyTests() {
     equal(findings.length, 1, 'deadline positive survives delimiters inside hidden destination');
     equal(findings[0]?.index, text.indexOf('改善する'), 'hidden destination positive index');
     equal(findings[0]?.length, '改善する'.length, 'hidden destination positive length');
+  }
+
+  {
+    const text = '申請フローを_改善する_ことができる仕組みです。';
+    const findings = findingsFor('deadline-missing', text);
+    equal(findings.length, 1, 'intraword underscores do not create a capability suffix adjacency');
+    equal(findings[0]?.index, text.indexOf('改善する'), 'intraword capability index');
+    equal(findings[0]?.length, '改善する'.length, 'intraword capability length');
+  }
+  for (const plain of positiveBoundaries) {
+    const text = replaceOnce(plain, '改善する', '_改善する_');
+    const findings = findingsFor('deadline-missing', text);
+    equal(findings.length, 1, `intraword future action remains detectable: ${text}`);
+    equal(findings[0]?.index, text.indexOf('改善する'), `intraword future action index: ${text}`);
+    equal(findings[0]?.length, '改善する'.length, `intraword future action length: ${text}`);
+  }
+
+  for (const fixture of [
+    ['カテゴリ変数から[ダミー](not a url)変数を作成した。', 1],
+    ['カテゴリ変数から[ダミー](relative-path)変数を作成した。', 0],
+    ['カテゴリ変数から[ダミー](<not a url>)変数を作成した。', 0],
+    ['カテゴリ変数から[ダミー]()変数を作成した。', 0],
+  ]) {
+    const [text, expected] = fixture;
+    const findings = findingsFor('placeholder', text);
+    equal(findings.length, expected, `valid/invalid inline destination boundary: ${text}`);
+    if (expected === 1) {
+      equal(findings[0]?.index, text.indexOf('ダミー'), 'invalid destination placeholder index');
+      equal(findings[0]?.length, 'ダミー'.length, 'invalid destination placeholder length');
+    }
+  }
+
+  {
+    const shortcodeFixtures = [
+      ['placeholder', '{{< note text="カテゴリ変数からダミー変数を作成した。" >}}', 0],
+      ['placeholder', '{{< note text="公開前にダミー変数を作成した。" >}}', 1],
+      ['absolute-claim', '{{< note text="六つすべてが公表値と一致する。" >}}', 0],
+      ['deadline-missing', '{{< note text="この規格に対応するアプリケーションの動作を確認した。" >}}', 0],
+    ];
+    for (const [ruleId, text, expected] of shortcodeFixtures) {
+      const doc = prepareMarkdown(text);
+      const visibleText = text.match(/\btext="([^"]*)"/u)?.[1] ?? '';
+      equal(doc.maskedText, visibleText + ' '.repeat(text.length - visibleText.length), `Hugo maskedText parity: ${ruleId}`);
+      equal(doc.sentences[0]?.text, visibleText, `Hugo sentence text parity: ${ruleId}`);
+      equal(doc.sentences[0]?.start, 0, `Hugo sentence start parity: ${ruleId}`);
+      equal(doc.sentences[0]?.end, visibleText.length, `Hugo sentence end parity: ${ruleId}`);
+      const findings = findingsFor(ruleId, text);
+      equal(findings.length, expected, `Hugo visible text keeps base rule behavior: ${ruleId}`);
+      if (ruleId === 'placeholder' && expected === 1) {
+        equal(findings[0]?.index, 4, 'Hugo visible replacement keeps base index');
+        equal(findings[0]?.length, 'ダミー'.length, 'Hugo visible replacement keeps base length');
+      }
+    }
+
+    const text = '{{< note text="前" term_id="x" >}}後';
+    const doc = prepareMarkdown(text);
+    const view = doc.adjacency.after(1, {
+      maxViewChars: 8,
+      maxSourceOffset: text.length,
+    });
+    equal(view.text, '', 'Hugo visible prefix does not bridge opaque shortcode remainder');
+    equal(view.stopReason, 'opaque-barrier', 'Hugo shortcode remainder remains opaque');
   }
 
   for (const text of [

@@ -40,6 +40,29 @@ function protectLiteralRanges(text, protectedOffsets) {
   }
 }
 
+function unicodeCharacterBefore(text, index) {
+  if (index <= 0) return undefined;
+  const last = text.charCodeAt(index - 1);
+  const start = last >= 0xDC00 && last <= 0xDFFF ? index - 2 : index - 1;
+  return text.slice(Math.max(0, start), index);
+}
+
+function unicodeCharacterAt(text, index) {
+  if (index < 0 || index >= text.length) return undefined;
+  const codePoint = text.codePointAt(index);
+  return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
+}
+
+function isUnicodeWordCharacter(value) {
+  return value !== undefined && /^[\p{L}\p{N}\p{M}_]$/u.test(value);
+}
+
+function isSupportedInlineDestination(destination) {
+  if (destination === '') return true;
+  if (/^<[^<>\n]*>$/u.test(destination)) return true;
+  return !/\s/u.test(destination);
+}
+
 function collectInlinePresentationRanges(text, kinds) {
   const protectedOffsets = new Uint8Array(text.length);
   protectLiteralRanges(text, protectedOffsets);
@@ -48,11 +71,16 @@ function collectInlinePresentationRanges(text, kinds) {
   // The visible label remains prose; its delimiters are transparent and the
   // destination (including parentheses) is hidden but bridgeable.
   for (const match of text.matchAll(/\[([^\]\n]{1,4096})\]\(([^)\n]{0,8192})\)/gu)) {
+    if (!isSupportedInlineDestination(match[2])) continue;
     const start = match.index;
     const labelEnd = start + 1 + match[1].length;
     const end = start + match[0].length;
+    const destinationStart = labelEnd + 2;
+    const destinationEnd = end - 1;
+    const angleBracketDestination = match[2].startsWith('<') && match[2].endsWith('>');
     let protectedRange = false;
     for (let index = start; index < end; index += 1) {
+      if (angleBracketDestination && index >= destinationStart && index < destinationEnd) continue;
       if (protectedOffsets[index] || kinds[index] === RANGE_OPAQUE) {
         protectedRange = true;
         break;
@@ -72,10 +100,10 @@ function collectInlinePresentationRanges(text, kinds) {
 
   const delimiterPatterns = [
     /\*\*(?=\S)([^\n]{0,4095}?\S)\*\*/gu,
-    /(?<![A-Za-z0-9_])__(?=\S)([^\n]{0,4095}?\S)__(?![A-Za-z0-9_])/gu,
+    /__(?=\S)([^\n]{0,4095}?\S)__/gu,
     /~~(?=\S)([^\n]{0,4095}?\S)~~/gu,
     /\*(?=\S)([^*\n]{0,4095}?\S)\*/gu,
-    /(?<![A-Za-z0-9_])_(?=\S)([^_\n]{0,4095}?\S)_(?![A-Za-z0-9_])/gu,
+    /_(?=\S)([^_\n]{0,4095}?\S)_/gu,
   ];
 
   for (const regex of delimiterPatterns) {
@@ -84,6 +112,10 @@ function collectInlinePresentationRanges(text, kinds) {
       const start = match.index;
       const end = start + match[0].length;
       if (isEscaped(text, start)) continue;
+      if (text[start] === '_' && (
+        isUnicodeWordCharacter(unicodeCharacterBefore(text, start)) ||
+        isUnicodeWordCharacter(unicodeCharacterAt(text, end))
+      )) continue;
       let protectedRange = false;
       for (let index = start; index < end; index += 1) {
         if (protectedOffsets[index] || kinds[index] === RANGE_OPAQUE) {
@@ -98,7 +130,7 @@ function collectInlinePresentationRanges(text, kinds) {
   }
 }
 
-function createView(originalText, kinds, position, options, direction) {
+function createView(originalText, viewText, kinds, position, options, direction) {
   const maxViewChars = Math.max(0, Math.trunc(options.maxViewChars ?? 32));
   const boundary = direction === 'before'
     ? clampOffset(options.minSourceOffset ?? 0, originalText.length)
@@ -141,10 +173,10 @@ function createView(originalText, kinds, position, options, direction) {
         break;
       }
       if (direction === 'before') {
-        chars.unshift(originalText[index]);
+        chars.unshift(viewText[index]);
         offsets.unshift(index);
       } else {
-        chars.push(originalText[index]);
+        chars.push(viewText[index]);
         offsets.push(index);
       }
     }
@@ -181,20 +213,31 @@ function createView(originalText, kinds, position, options, direction) {
   });
 }
 
-export function createMarkdownAdjacency(originalText, { opaqueRanges = [] } = {}) {
+export function createMarkdownAdjacency(
+  originalText,
+  { opaqueRanges = [], semanticText = originalText, semanticRanges = [] } = {},
+) {
+  const viewChars = originalText.split('');
+  for (const range of semanticRanges) {
+    if (!range) continue;
+    const start = clampOffset(range.start, originalText.length);
+    const end = clampOffset(range.end, originalText.length);
+    for (let index = start; index < end; index += 1) viewChars[index] = semanticText[index];
+  }
+  const viewText = viewChars.join('');
   const kinds = new Uint8Array(originalText.length);
   for (const range of opaqueRanges) {
     if (!range) continue;
     setRange(kinds, range.start, range.end, RANGE_OPAQUE, { overwrite: true });
   }
-  collectInlinePresentationRanges(originalText, kinds);
+  collectInlinePresentationRanges(viewText, kinds);
 
   return Object.freeze({
     before(position, options = {}) {
-      return createView(originalText, kinds, position, options, 'before');
+      return createView(originalText, viewText, kinds, position, options, 'before');
     },
     after(position, options = {}) {
-      return createView(originalText, kinds, position, options, 'after');
+      return createView(originalText, viewText, kinds, position, options, 'after');
     },
   });
 }
